@@ -23,12 +23,29 @@ def save_mask_png(mask: np.ndarray, path) -> None:
     Image.fromarray((mask.astype(np.uint8) * 255), mode="L").save(path)
 
 
-def overlay(img: Image.Image, objects: list) -> Image.Image:
-    """objects: [{'id','label','mask','bbox'}] -> image with tinted masks and labels."""
+def mask_outline(mask: np.ndarray, width: int = 3) -> np.ndarray:
+    """Pixels on the inside edge of a mask (mask minus the mask shrunk by `width` pixels)."""
+    inner = mask.copy()
+    for _ in range(width):
+        shrunk = inner.copy()
+        shrunk[1:, :] &= inner[:-1, :]
+        shrunk[:-1, :] &= inner[1:, :]
+        shrunk[:, 1:] &= inner[:, :-1]
+        shrunk[:, :-1] &= inner[:, 1:]
+        inner = shrunk
+    return mask & ~inner
+
+
+def overlay(img: Image.Image, objects: list, tint: float = 0.55, outline: int = 0) -> Image.Image:
+    """objects: [{'id','label','mask','bbox'}] -> image with tinted masks and labels.
+    tint is how strongly the mask colour covers the object; outline > 0 also draws its edge."""
     base = np.array(img).astype(np.float32)
     for i, o in enumerate(objects):
         c = np.array(COLORS[i % len(COLORS)], dtype=np.float32)
-        base[o["mask"]] = base[o["mask"]] * 0.45 + c * 0.55
+        if tint > 0:
+            base[o["mask"]] = base[o["mask"]] * (1 - tint) + c * tint
+        if outline > 0:
+            base[mask_outline(o["mask"], outline)] = c
     out = Image.fromarray(base.astype(np.uint8))
     d = ImageDraw.Draw(out)
     for i, o in enumerate(objects):
@@ -51,7 +68,7 @@ def contact_sheet(img: Image.Image, objects: list, tile: int = 256, cols: int = 
                   margin: float = 0.15) -> Image.Image:
     """One image the model can read: the scene with numbered masks on top, and below it a close-up
     crop of every object labelled with its id. objects: [{'id','label','mask','bbox'}]."""
-    top = overlay(img, objects)
+    top = overlay(img, objects, tint=0.12, outline=3)   # light tint + edge: the model sees true colours
     scale = min(1.0, 1024 / top.width)
     top = top.resize((int(top.width * scale), int(top.height * scale)))
     rows = (len(objects) + cols - 1) // cols

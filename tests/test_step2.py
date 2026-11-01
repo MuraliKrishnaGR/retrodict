@@ -183,3 +183,38 @@ def test_pipeline_saves_quality_result(tmp_path):
     res = asyncio.run(run_photo(StoryModels(), photo, tmp_path / "out"))
     assert res["quality_issues"] == []
     assert json.loads((tmp_path / "out" / "result.json").read_text())["quality_issues"] == []
+
+
+def test_contact_sheet_keeps_true_colours():
+    from app.imaging import contact_sheet, mask_outline
+    m = np.zeros((40, 40), bool); m[10:30, 10:30] = True
+    edge = mask_outline(m, 3)
+    assert edge[10, 20] and edge[12, 20] and not edge[13, 20] and not edge[20, 20]   # 3-px inner edge only
+    img = Image.new("RGB", (40, 40), (120, 80, 40))                                   # brown object
+    sheet = np.array(contact_sheet(img, [{"id": "o1", "label": "jar", "mask": m, "bbox": [10, 10, 29, 29]}]))
+    centre = sheet[20, 20].astype(int)
+    assert abs(centre[0] - 120) < 25 and abs(centre[1] - 80) < 25 and abs(centre[2] - 40) < 25  # still brown
+
+
+import pytest  # noqa: E402
+
+TRUE_COLOURS = {"white": (245, 245, 245), "black": (15, 15, 15), "brown": (120, 80, 40),
+                "yellow": (240, 200, 30), "red": (200, 30, 30), "green": (40, 160, 60),
+                "blue": (40, 70, 200), "tea": (150, 95, 45), "milk": (235, 225, 200)}
+
+
+@pytest.mark.parametrize("name", sorted(TRUE_COLOURS))
+def test_contact_sheet_keeps_every_colour(name):
+    """Every object keeps its own colour on the sheet: no channel moves by more than the 12% tint allows,
+    whichever of the 8 mask colours it gets (we try one object per mask colour)."""
+    from app.imaging import COLORS, contact_sheet
+    rgb = TRUE_COLOURS[name]
+    img = Image.new("RGB", (8 * 40, 40), rgb)
+    objs = []
+    for i in range(len(COLORS)):
+        m = np.zeros((40, 8 * 40), bool); m[5:35, i * 40 + 5:i * 40 + 35] = True
+        objs.append({"id": f"o{i + 1}", "label": "x", "mask": m, "bbox": [i * 40 + 5, 5, i * 40 + 34, 34]})
+    sheet = np.array(contact_sheet(img, objs)).astype(int)
+    for i in range(len(COLORS)):
+        shift = np.abs(sheet[20, i * 40 + 20] - np.array(rgb)).max()
+        assert shift <= 0.12 * 255 + 3, f"{name} under mask colour {i}: shifted by {shift}"
