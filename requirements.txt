@@ -1,6 +1,10 @@
 openai==2.21.0
-meta-sam-parser==0.0.5
 python-dotenv>=1.0
 pillow>=10.0
 numpy>=1.26
+pydantic>=2.0
 pytest>=8.0
+# Local SAM 3.1 (open weights, runs on CPU). On Windows these are CPU builds.
+torch>=2.6
+torchvision>=0.21
+transformers==5.22.1
