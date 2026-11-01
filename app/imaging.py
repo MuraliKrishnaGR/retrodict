@@ -39,3 +39,34 @@ def overlay(img: Image.Image, objects: list) -> Image.Image:
         d.rectangle([l, max(0, t - 14), l + 7 * len(tag) + 6, t], fill=col)
         d.text((l + 3, max(0, t - 13)), tag, fill=(255, 255, 255))
     return out
+
+
+def to_jpeg(img: Image.Image, quality: int = 88) -> bytes:
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=quality)
+    return buf.getvalue()
+
+
+def contact_sheet(img: Image.Image, objects: list, tile: int = 256, cols: int = 4,
+                  margin: float = 0.15) -> Image.Image:
+    """One image the model can read: the scene with numbered masks on top, and below it a close-up
+    crop of every object labelled with its id. objects: [{'id','label','mask','bbox'}]."""
+    top = overlay(img, objects)
+    scale = min(1.0, 1024 / top.width)
+    top = top.resize((int(top.width * scale), int(top.height * scale)))
+    rows = (len(objects) + cols - 1) // cols
+    sheet = Image.new("RGB", (max(top.width, cols * tile), top.height + rows * (tile + 22)), (255, 255, 255))
+    sheet.paste(top, (0, 0))
+    d = ImageDraw.Draw(sheet)
+    for i, o in enumerate(objects):
+        l, t, r, b = o["bbox"]
+        mx, my = (r - l) * margin, (b - t) * margin
+        box = (max(0, int(l - mx)), max(0, int(t - my)), min(img.width, int(r + mx)), min(img.height, int(b + my)))
+        crop = img.crop(box)
+        crop.thumbnail((tile, tile))
+        x = (i % cols) * tile
+        y = top.height + (i // cols) * (tile + 22)
+        d.rectangle([x, y, x + tile - 1, y + 20], fill=COLORS[i % len(COLORS)])
+        d.text((x + 4, y + 4), f"{o['id']}  {o['label']}", fill=(255, 255, 255))
+        sheet.paste(crop, (x + (tile - crop.width) // 2, y + 22))
+    return sheet
