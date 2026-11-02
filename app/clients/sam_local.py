@@ -1,6 +1,7 @@
 """SAM 3.1 open weights, run locally with Hugging Face transformers (CPU is fine).
 The image is encoded once; each extra concept phrase only runs the light decoder.
 Results are cached on disk, so the same photo and phrase are never computed twice."""
+import contextlib
 import io
 
 import numpy as np
@@ -8,6 +9,14 @@ from PIL import Image
 
 from app import config
 from app.cache import DiskCache, make_key
+
+
+def _no_grad():
+    try:
+        import torch
+        return torch.inference_mode()
+    except ImportError:                     # tests run fake models without torch installed
+        return contextlib.nullcontext()
 
 
 def clean_box(box, mask) -> list:
@@ -68,13 +77,17 @@ class LocalSAM:
 
         img = Image.open(io.BytesIO(jpeg)).convert("RGB")
         model, processor = self._load()
-        vision = self._vision_features(jpeg, img)
-        text_inputs = processor(text=concept, return_tensors="pt")
-        outputs = model(vision_embeds=vision, input_ids=text_inputs["input_ids"],
-                        attention_mask=text_inputs["attention_mask"])
-        res = processor.post_process_instance_segmentation(
-            outputs, threshold=config.SAM_SCORE_THRESHOLD, mask_threshold=config.SAM_MASK_THRESHOLD,
-            target_sizes=[(img.height, img.width)])[0]
+        # Gradients off for THIS thread. SAM runs in worker threads (asyncio.to_thread), and torch's grad
+        # switch is per thread: set once at load time, it did not hold in another thread (run 6: the
+        # microscope search crashed with "Can't call numpy() on Tensor that requires grad").
+        with _no_grad():
+            vision = self._vision_features(jpeg, img)
+            text_inputs = processor(text=concept, return_tensors="pt")
+            outputs = model(vision_embeds=vision, input_ids=text_inputs["input_ids"],
+                            attention_mask=text_inputs["attention_mask"])
+            res = processor.post_process_instance_segmentation(
+                outputs, threshold=config.SAM_SCORE_THRESHOLD, mask_threshold=config.SAM_MASK_THRESHOLD,
+                target_sizes=[(img.height, img.width)])[0]
         self.computed += 1
 
         masks = np.asarray(res["masks"]).astype(bool)
