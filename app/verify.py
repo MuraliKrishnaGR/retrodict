@@ -2,11 +2,18 @@
 
 The checker sees the close-ups and a list of plain claims ("o2: the mug is half full"), but NOT the
 story they support, so it cannot be talked into agreeing. Evidence it rejects is removed; an event
-left with no confirmed evidence is moved to 'rejected', so the UI can show what the verifier caught."""
+left with no confirmed evidence is moved to 'rejected', so the UI can show what the verifier caught.
+
+Clock gate: a trace clock may date an event only if the checker also confirms, by itself, that the trace
+is really there (run 2 on the milk photo: small bubbles were read as a skin, and the skin's clock then
+moved a 3-minute-old drink to "10 to 90 min"). An unconfirmed trace loses its clock."""
+from app.clocks import LOOKS
 from app.schemas import VerifyReport
 
-VERIFY_PROMPT = """You are checking facts about a photo, independently. The image shows a scene with numbered
-objects on top and a close-up of each object below. For EACH claim, look only at the image and answer:
+VERIFY_PROMPT = """You are checking facts about a photo, independently. The image shows sharp close-ups of the
+objects named in the claims, each labelled with its id; where there are two side by side, the RIGHT one has
+its contrast boosted to reveal faint steam or wet shine (glare looks brighter there too). For EACH claim,
+look only at the image and answer:
 "yes" if the image clearly shows it, "no" if the image clearly contradicts it, "unclear" if you cannot tell.
 Be strict: a claim about the past ("was poured", "someone ate") is "unclear" unless the image shows it.
 
@@ -24,7 +31,18 @@ def build_claims(events: list, labels: dict) -> list:
         for i, ev in enumerate(e["evidence"]):
             claims.append({"claim_id": f"c{len(claims) + 1}", "event_id": e["id"], "index": i,
                            "text": f"{ev['object_id']} ({labels.get(ev['object_id'], '?')}): {ev['observation']}"})
+        if e.get("clock", "no_clock") != "no_clock" and e.get("trace") in LOOKS:
+            oid = e["evidence"][0]["object_id"]
+            claims.append({"claim_id": f"c{len(claims) + 1}", "event_id": e["id"], "index": None, "kind": "trace",
+                           "text": f"{oid} ({labels.get(oid, '?')}): shows {LOOKS[e['trace']]}"})
     return claims
+
+
+def _drop_clock(e: dict, verdict: str, note: str) -> dict:
+    """The trace was not confirmed: its clock may not date the event. Back to 'no minimum time'."""
+    hi = max(e.get("model_range", [0, e["minutes_before_max"]])[1], e["minutes_before_max"])
+    return dict(e, minutes_before_min=0.0, minutes_before_max=hi, clock="clock_not_applied", clock_rule=None,
+                trace_check={"trace": e.get("trace"), "verdict": verdict, "note": note})
 
 
 def apply_checks(events: list, claims: list, verdicts: dict) -> tuple:
@@ -37,6 +55,12 @@ def apply_checks(events: list, claims: list, verdicts: dict) -> tuple:
         results = []
         for c in by_event.get(e["id"], []):
             verdict, note = verdicts.get(c["claim_id"], ("unclear", "not checked"))
+            if c.get("kind") == "trace":
+                if verdict == "yes":
+                    e = dict(e, trace_check={"trace": e.get("trace"), "verdict": verdict, "note": note})
+                else:
+                    e = _drop_clock(e, verdict, note)
+                continue
             results.append({**e["evidence"][c["index"]], "verdict": verdict, "note": note})
         confirmed = [r for r in results if r["verdict"] == "yes"]
         unclear = [r for r in results if r["verdict"] == "unclear"]
@@ -50,12 +74,12 @@ def apply_checks(events: list, claims: list, verdicts: dict) -> tuple:
     return kept, rejected
 
 
-async def verify(models, sheet_jpeg: bytes, events: list, labels: dict) -> dict:
+async def verify(models, image_jpeg: bytes, events: list, labels: dict) -> dict:
     claims = build_claims(events, labels)
     if not claims:
         return {"events": [], "rejected": [], "claims": 0}
     text = "\n".join(f"- {c['claim_id']}: {c['text']}" for c in claims)
-    report = await models.spark_json(VERIFY_PROMPT.format(claims=text), VerifyReport, jpeg=sheet_jpeg, tag="verify")
+    report = await models.spark_json(VERIFY_PROMPT.format(claims=text), VerifyReport, jpeg=image_jpeg, tag="verify")
     verdicts = {c.claim_id: (c.verdict, c.note) for c in report.checks}
     kept, rejected = apply_checks(events, claims, verdicts)
     return {"events": kept, "rejected": rejected, "claims": len(claims)}
