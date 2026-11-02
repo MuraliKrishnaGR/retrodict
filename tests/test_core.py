@@ -258,3 +258,34 @@ def test_overlay_draws_labels_for_objects_at_the_top_edge():
     out = overlay(img, [{"id": "o1", "label": "jar", "mask": m, "bbox": [50.0, 0.0, 90.0, 30.0]}],
                   tint=0.12, outline=3)
     assert out.size == (200, 100)
+
+
+def test_sam_works_from_any_thread_without_gradients(tmp_path):
+    """Run 6: the microscope search ran SAM in a new worker thread, where torch still tracked gradients,
+    and crashed with "Can't call numpy() on Tensor that requires grad". Runs where torch is installed."""
+    import threading
+    torch = __import__("pytest").importorskip("torch")
+    import io
+
+    class GradModel(FakeSamModel):
+        def __init__(self):
+            super().__init__()
+            self.w = torch.nn.Parameter(torch.ones(1))
+
+        def __call__(self, vision_embeds, input_ids, attention_mask):
+            self.decode_calls += 1
+            return {"scores": self.w * 0.9}               # requires grad unless grad is switched off
+
+    class GradProcessor(FakeSamProcessor):
+        def post_process_instance_segmentation(self, outputs, threshold, mask_threshold, target_sizes):
+            h, w = target_sizes[0]
+            s = float(outputs["scores"].numpy()[0])      # the call that crashed
+            m = np.zeros((h, w), bool); m[2:6, 2:6] = True
+            return [{"masks": [m], "boxes": [[2, 2, 6, 6]], "scores": [s]}]
+
+    buf = io.BytesIO(); Image.new("RGB", (20, 16)).save(buf, format="JPEG")
+    sam = LocalSAM(cache=DiskCache(tmp_path), model=GradModel(), processor=GradProcessor())
+    out = {}
+    t = threading.Thread(target=lambda: out.update(items=sam.segment(buf.getvalue(), "spoon")))
+    t.start(); t.join()
+    assert out["items"][0]["score"] == 0.9
