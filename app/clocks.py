@@ -28,7 +28,35 @@ CLOCKS = {
 }
 
 NO_CLOCK = {"crumbs", "open_package", "partially_eaten", "lid_off", "utensil_used",
-            "door_or_drawer_open", "displaced_furniture"}   # show WHAT happened, not WHEN
+            "door_or_drawer_open", "displaced_furniture", "residue"}   # show WHAT happened, not WHEN
+
+
+# What each trace looks like, and what it is often confused with. Used when reading the photo and when
+# the verifier confirms a trace before its clock may date anything (run 2: bubbles were read as a skin).
+LOOKS = {
+    "steam":             "a soft white haze rising from a hot drink (not glare or reflections)",
+    "liquid_film":       "a matte, wrinkled skin covering the surface of milk or tea "
+                         "(small bubbles, froth or shine are NOT a skin)",
+    "ice_whole":         "ice cubes with sharp edges in a drink",
+    "ice_partly_melted": "ice pieces with rounded edges in a drink",
+    "condensation":      "small water droplets on the OUTSIDE of a cold glass",
+    "wet_spill":         "a shiny puddle or wet patch of liquid on a surface",
+    "wet_ring":          "a still-wet ring of liquid where a cup stands or stood",
+    "dry_ring_stain":    "a dried ring-shaped stain where a cup stood",
+    "damp_cloth":        "a cloth darker or shiny from water",
+    "crumbs":            "small loose bits of food on a surface",
+    "open_package":      "a wrapper or box that is torn or open",
+    "partially_eaten":   "food with bites or pieces missing",
+    "lid_off":           "a container with its lid removed",
+    "utensil_used":      "a spoon, knife or fork with food or liquid on it, or left out after use",
+    "door_or_drawer_open": "a door or drawer left open",
+    "displaced_furniture": "a chair or furniture pushed out of its usual place",
+    "residue":           "drips, film or leftovers inside or on a container after its contents were poured or used",
+}
+
+
+def traces_guide() -> str:
+    return "\n".join(f"  - {k}: {v}" for k, v in LOOKS.items())
 
 
 def clock_for(trace):

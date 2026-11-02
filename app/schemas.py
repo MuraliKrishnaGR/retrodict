@@ -30,7 +30,17 @@ TRACE_NAMES = {
     "steam", "liquid_film", "ice_whole", "ice_partly_melted", "condensation",
     "wet_spill", "wet_ring", "dry_ring_stain", "damp_cloth",
     "crumbs", "open_package", "partially_eaten", "lid_off", "utensil_used",
-    "door_or_drawer_open", "displaced_furniture",
+    "door_or_drawer_open", "displaced_furniture", "residue",
+}
+
+
+# How the rewind can show the scene BEFORE an event, using only the real photo:
+UNDO_KINDS = {
+    "remove",      # the object was put there by the event: erase it and repair the background
+    "add_steam",   # the drink was still hot: draw soft steam above it
+    "refill",      # some was eaten or drunk: show it fuller
+    "move",        # the object was moved: show where it was
+    "mark",        # cannot be shown honestly with pixels: outline and label only
 }
 
 
@@ -70,16 +80,27 @@ class Event(BaseModel):
     trace: Optional[str] = None                      # the physical trace that dates it, if any
     confidence: float = Field(default=0.5, ge=0, le=1)
     alternatives: list[str] = []
+    undo: str = "mark"                               # how the rewind shows the scene BEFORE this event
 
     @field_validator("trace", mode="before")
     @classmethod
     def _known_trace(cls, v):
         return _norm_trace(v)
 
+    @field_validator("undo", mode="before")
+    @classmethod
+    def _known_undo(cls, v):
+        v = str(v or "").strip().lower().replace(" ", "_")
+        return v if v in UNDO_KINDS else "mark"
+
 
 class Timeline(BaseModel):
     summary: str = ""
     events: list[Event]
+
+
+class Summary(BaseModel):
+    summary: str = ""
 
 
 class ClaimCheck(BaseModel):
@@ -96,3 +117,20 @@ class ClaimCheck(BaseModel):
 
 class VerifyReport(BaseModel):
     checks: list[ClaimCheck]
+
+
+class AgentStep(BaseModel):
+    """One move of the investigator: look closer, search for something, check a clock, or finish."""
+    thought: str = ""                                 # one short sentence: why this move
+    action: Literal["zoom", "search", "clock", "finish"]
+    object_id: Optional[str] = None                   # for zoom
+    phrase: Optional[str] = None                      # for search: a plain noun, e.g. "spoon"
+    trace: Optional[str] = None                       # for clock
+    summary: str = ""                                 # for finish
+    events: list[Event] = []                          # for finish
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def _norm_action(cls, v):
+        v = str(v or "").strip().lower()
+        return v if v in ("zoom", "search", "clock", "finish") else "finish"

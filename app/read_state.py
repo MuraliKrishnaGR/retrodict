@@ -1,8 +1,8 @@
 """Pipeline step 2: read each object's CURRENT state from its own close-up crop."""
-from app.clocks import CLOCKS, NO_CLOCK
+from app.clocks import traces_guide
 from app.schemas import StateReport
 
-TRACES = ", ".join(sorted(list(CLOCKS) + list(NO_CLOCK)))
+TRACES = traces_guide()
 
 STATE_PROMPT = """This image has two parts: on top, a photo of a scene with numbered objects; below, a close-up crop
 of each object labelled with its id. You are a careful investigator. For EACH object id listed, describe
@@ -14,8 +14,9 @@ For each object give:
 - "what": a short description that tells it apart (colour, material, lid, contents).
 - "observations": 2 to 5 short visible facts (fill level, open or closed, wet or dry, steam, crumbs,
   wrapper torn, position, residue). Write "unclear" rather than guess.
-- "traces": any of these physical traces you can actually SEE on it (exact words, can be empty):
-  {traces}
+- "traces": any of these physical traces you can actually SEE on it (exact names, can be empty). Each is
+  defined by what it looks like; only use a name when the crop really shows that:
+{traces}
 - "confidence": 0 to 1, how clearly the crop shows its state.
 Return ONLY JSON: {{"objects": [{{"object_id": "o1", "what": "...", "observations": ["..."],
 "traces": [], "confidence": 0.8}}]}}"""
