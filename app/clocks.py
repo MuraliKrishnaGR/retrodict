@@ -28,7 +28,7 @@ CLOCKS = {
 }
 
 NO_CLOCK = {"crumbs", "open_package", "partially_eaten", "lid_off", "utensil_used",
-            "door_or_drawer_open", "displaced_furniture", "residue"}   # show WHAT happened, not WHEN
+            "door_or_drawer_open", "displaced_furniture", "residue", "level_dropped"}   # show WHAT happened, not WHEN
 
 
 # What each trace looks like, and what it is often confused with. Used when reading the photo and when
@@ -52,6 +52,9 @@ LOOKS = {
     "door_or_drawer_open": "a door or drawer left open",
     "displaced_furniture": "a chair or furniture pushed out of its usual place",
     "residue":           "drips, film or leftovers inside or on a container after its contents were poured or used",
+    "level_dropped":     "a wet film or band on the INSIDE wall of a cup ABOVE the current drink level, all the way "
+                         "round: it was fuller before, so some was drunk or poured out (a few scattered drops are "
+                         "splashes from pouring, not this)",
 }
 
 
