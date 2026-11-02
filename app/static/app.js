@@ -7,8 +7,12 @@ let current = null;
 
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function fmt(m) { return m < 120 ? `${+m.toFixed(1)} min` : `${(m / 60).toFixed(1)} h`; }
+const DATED = ["clock_agrees", "narrowed_by_clock", "replaced_by_clock"];
+// A time is shown only when a clue in the photo gave one; otherwise the model's guess is not a time.
+function isDated(e) { return "dated" in e ? e.dated : DATED.includes(e.clock); }
 function whenText(e) {
   const lo = e.minutes_before_min, hi = e.minutes_before_max;
+  if (!isDated(e)) return lo > 0 ? `at least ${fmt(lo)} before` : "time unknown";
   if (lo === 0) return `up to ${fmt(hi)} before`;
   return hi < 120 ? `${+lo.toFixed(1)} to ${+hi.toFixed(1)} min before` : `${fmt(lo)} to ${fmt(hi)} before`;
 }
@@ -94,11 +98,13 @@ function render() {
   renderSteps(res.trace.concat(current.files.includes("rewind.mp4") ? [{ step: "rewind", seconds: "" }] : []));
   renderMoves(res.moves);
   renderRuler(res);
+  loadCheck(current.name);
 }
 
 function renderRuler(res) {
   const events = res.events || [];
-  const maxM = Math.max(10, ...events.map((e) => e.minutes_before_max));
+  const dated = events.filter(isDated);
+  const maxM = Math.max(10, ...dated.map((e) => e.minutes_before_max));
   const narrow = $("ruler").clientWidth < 560;
   const ticks = (narrow ? [0, 5, 15, 60, 240, 1440] : [0, 1, 2, 5, 10, 15, 30, 60, 120, 240, 480, 1440])
     .filter((t) => t <= maxM * 1.05);
@@ -107,19 +113,104 @@ function renderRuler(res) {
   // square-root scale: the last minutes get room, a long past stays on screen; now is on the right
   const x = (m) => 100 - (Math.sqrt(m) / Math.sqrt(top)) * 100;
   const rows = events.map((e, i) => {
-    const left = x(e.minutes_before_max), right = x(e.minutes_before_min);
-    const cls = [e.status === "contested" ? "contested" : "", e.status === "partly_verified" ? "partly" : "",
-                 e.clock && !["no_clock", "clock_not_applied"].includes(e.clock) ? "clocked" : ""].join(" ");
-    return `<button class="row" data-i="${i}" aria-pressed="false">
-      <span class="label">${esc(e.description)}</span>
-      <span class="track"><span class="band ${cls}" style="left:${left}%;width:${Math.max(0.8, right - left)}%"
-            title="${esc(whenText(e))}"></span></span></button>`;
+    let mark;
+    if (isDated(e)) {
+      const left = x(e.minutes_before_max), right = x(e.minutes_before_min);
+      const cls = [e.status === "contested" ? "contested" : "", e.status === "partly_verified" ? "partly" : "",
+                   e.clock && DATED.includes(e.clock) ? "clocked" : ""].join(" ");
+      mark = `<span class="band ${cls}" style="left:${left}%;width:${Math.max(0.8, right - left)}%" title="${esc(whenText(e))}"></span>`;
+    } else {
+      mark = `<span class="unknown">${esc(whenText(e))}</span>`;
+    }
+    const label = `<span class="label"><span class="num">${i + 1}</span>${esc(e.description)}</span>`;
+    if (!dated.length)                 // nothing dated: an ordered list, no empty time axis
+      return `<button class="row" data-i="${i}" aria-pressed="false">${label}<span class="chip">${esc(whenText(e))}</span></button>`;
+    return `<button class="row" data-i="${i}" aria-pressed="false">${label}
+      <span class="track ${isDated(e) ? "" : "undated"}">${mark}</span></button>`;
   }).join("");
   const axis = ticks.map((t) => `<span class="tick ${t === 0 ? "now" : ""}" style="left:${x(t)}%">${t === 0 ? "photo" : fmt(t)}</span>`).join("");
-  $("ruler").innerHTML = (rows || `<p>No sign of recent activity.</p>`) + `<div class="axis">${axis}</div>`;
+  const foot = dated.length ? `<div class="axis">${axis}</div>`
+    : events.length ? `<p class="order-note">Nothing in this photo shows how long ago these happened, so they are shown in order only, oldest first.</p>` : "";
+  $("ruler").classList.toggle("orderonly", !dated.length);
+  $("ruler").innerHTML = (rows || `<p>No sign of recent activity.</p>`) + foot;
   $("ruler").querySelectorAll(".row").forEach((b) => b.onclick = () => select(+b.dataset.i));
   if (events.length) select(0); else $("detail").hidden = true;
 }
+
+// How it did: score.json from scripts/score.py (the answer key from the real video + V-JEPA 2 watching it)
+async function loadCheck(name) {
+  $("check").hidden = true;
+  if (!current.files.includes("score.json")) return;
+  const r = await fetch(`/files/${encodeURIComponent(name)}/score.json`);
+  if (!r.ok || !current || current.name !== name) return;
+  renderCheck(await r.json());
+}
+
+function shortText(t, limit = 110) {
+  t = plainIds(t).trim().replace(/\.$/, "");
+  if (t.length <= limit) return t;
+  const cut = t.slice(0, limit), at = Math.max(cut.lastIndexOf(", "), cut.lastIndexOf(" "));
+  return cut.slice(0, at > 40 ? at : limit).replace(/,$/, "") + "…";
+}
+
+function renderCheck(data) {
+  const s = data.score, w = data.witness, scene = data.scene || {};
+  $("check").hidden = false;
+  $("c-scene").textContent = scene.split === "dev"
+    ? "Practice scene: it was used while building Retrodict, so this is not a fair test." : "";
+  const parts = [`Found ${s.found} of ${s.total} things that really happened`];
+  if (s.order_pairs) parts.push(`${s.order_agree} of ${s.order_pairs} pairs in the right order`);
+  parts.push(s.unsupported.length === 1 ? "1 thing said that didn't happen" : `${s.unsupported.length} things said that didn't happen`);
+  $("c-sum").textContent = parts.join(" · ") + ".";
+
+  const wit = Object.fromEntries(((w && w.events) || []).map((r) => [r.id, r]));
+  const real = [...s.events];              // the key lists events in the order they happened
+  const retro = s.retro || [];
+  const left = real.map((e, i) => {
+    const v = wit[e.id];
+    const seen = !v ? "" : !v.can_see ? "Video model: has no word for this"
+      : v.seen ? `Video model saw “${v.plain}” at ${v.at[0]}–${v.at[1]} s` : "Video model: didn't see it";
+    return `<li class="${e.found ? "" : "missed"}" data-key="${esc(e.id)}"><span class="num">${i + 1}</span>
+      <span><b>${esc(e.what.charAt(0).toUpperCase() + e.what.slice(1))}</b>
+      ${e.found ? "" : `<span class="status missed">Missed</span>`}
+      ${seen ? `<span class="witness" title="${esc(v.label || "")}">${esc(seen)}</span>` : ""}</span></li>`;
+  }).join("");
+  const right = retro.map((r, i) =>
+    `<li class="${r.key ? "" : "made-up"}" data-key="${esc(r.key || "")}"><span class="num">${i + 1}</span>
+      <span>${esc(shortText(r.text))}${r.key ? "" : `<span class="status missed">Didn't happen</span>`}</span></li>`).join("");
+  $("c-order").innerHTML = `<div class="col-head">What really happened (video)</div><div></div>
+    <div class="col-head">What Retrodict said (photo only)</div>
+    <ol class="real">${left}</ol><svg class="links" aria-hidden="true"></svg><ol class="said">${right}</ol>`;
+  drawLinks();
+
+  const [lo, hi] = s.real_span_min || [0, 0];
+  let when = `When: in the video, all of this happened ${+lo.toFixed(1)} to ${+hi.toFixed(1)} min before the photo. `;
+  when += s.dated ? `Retrodict dated ${s.dated} of them from clues; ${s.covered} of those times contain the real time`
+                    + (s.median_width_min != null ? `, about ${fmt(s.median_width_min)} wide.` : ".")
+                  : "Retrodict found no clue in the photo that dates them, so it says “time unknown” instead of guessing.";
+  $("c-when").textContent = when;
+  $("c-extra").innerHTML = w ? `<li>V-JEPA 2, Meta's video model, watched the real video as a second witness: it saw
+    ${w.seen} of the ${w.seeable} events it has words for, and ${w.stray_windows} of its ${w.action_windows} action
+    moments matched nothing that really happened. It only knows hand actions, never object names.</li>` : "";
+}
+
+// Lines from each real event to the Retrodict step that describes it; a line that crosses another is an order mistake.
+function drawLinks() {
+  const box = $("c-order"), svg = box.querySelector("svg.links");
+  if (!svg || box.closest("[hidden]")) return;
+  const sb = svg.getBoundingClientRect();
+  const leftOf = Object.fromEntries([...box.querySelectorAll("ol.real li")].map((li, i) => [li.dataset.key, { li, i }]));
+  const pairs = [...box.querySelectorAll("ol.said li")].map((li, j) => ({ j, li, l: leftOf[li.dataset.key] }))
+    .filter((p) => p.li.dataset.key && p.l);
+  const mid = (el) => { const r = el.getBoundingClientRect(); return r.top + Math.min(r.height / 2, 14) - sb.top; };
+  svg.setAttribute("viewBox", `0 0 ${sb.width} ${sb.height}`);
+  svg.innerHTML = pairs.map((p) => {
+    const crosses = pairs.some((q) => q !== p && (q.l.i - p.l.i) * (q.j - p.j) < 0);
+    const y1 = mid(p.l.li), y2 = mid(p.li);
+    return `<path class="${crosses ? "wrong" : "right"}" d="M2 ${y1} C ${sb.width / 2} ${y1}, ${sb.width / 2} ${y2}, ${sb.width - 2} ${y2}"/>`;
+  }).join("");
+}
+window.addEventListener("resize", () => { if (current) drawLinks(); });
 
 function select(i) {
   const e = current.result.events[i];
@@ -128,7 +219,8 @@ function select(i) {
   $("d-when").textContent = whenText(e);
   $("d-desc").textContent = e.description;
   const why = [e.clock_rule && `Physics: ${e.clock_rule}.`, e.bounded_by && `Also ${e.bounded_by}.`,
-               e.trace_check && e.trace_check.verdict !== "yes" && `The checker did not confirm the ${String(e.trace_check.trace).replace(/_/g, " ")}, so no clock was used.`]
+               e.trace_check && e.trace_check.verdict !== "yes" && `The checker did not confirm the ${String(e.trace_check.trace).replace(/_/g, " ")}, so no clock was used.`,
+               !isDated(e) && "Nothing in the photo shows when this happened, so no time is given."]
               .filter(Boolean).join(" ");
   $("d-physics").hidden = !why; $("d-physics").textContent = why;
   $("d-evidence").innerHTML = e.evidence.map((ev) =>

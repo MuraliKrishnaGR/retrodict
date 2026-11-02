@@ -11,8 +11,9 @@ KEY = {"video": "v.mp4", "video_seconds": 120, "photo_delay_min": [0, 1], "event
     {"id": "bite", "what": "bite eaten", "seconds": [90, 100], "match": r"\b(bite|eaten)\b", "witness": []}]}
 
 
-def ev(i, text, lo, hi, status="verified"):
-    return {"id": f"e{i}", "description": text, "minutes_before_min": lo, "minutes_before_max": hi, "status": status}
+def ev(i, text, lo, hi, status="verified", clock="clock_agrees"):
+    return {"id": f"e{i}", "description": text, "minutes_before_min": lo, "minutes_before_max": hi, "status": status,
+            "clock": clock}
 
 
 def test_true_minutes_counts_back_from_the_end_plus_photo_delay():
@@ -29,7 +30,8 @@ def test_score_counts_found_covered_order_and_unsupported():
     events = [ev(1, "Sugar scooped in", 0, 60), ev(2, "Milk poured into the glass", 0, 1.0),
               ev(3, "Milk was frothed", 0, 40), ev(4, "A rejected guess about a lid", 0, 5, status="rejected")]
     s = score.score_run({"events": events}, KEY)
-    assert (s["found"], s["total"], s["covered"]) == (2, 4, 1)          # the 0-1 min pour misses 1.67-2.83
+    assert (s["found"], s["total"], s["dated"], s["covered"]) == (2, 4, 2, 1)   # the 0-1 min pour misses 1.67-2.83
+    assert [r["key"] for r in s["retro"]] == ["sugar", "pour", None]
     assert s["order_wrong"] == ["pour happened before sugar"] and s["order_pairs"] == 1
     assert [u["event"] for u in s["unsupported"]] == ["e3"]              # rejected events are not scored
 
@@ -58,3 +60,16 @@ def test_milk_key_is_valid():
     key = score.load_key(Path(__file__).resolve().parent.parent / "eval/keys/milk_01.json")
     assert key["split"] == "dev" and len(key["events"]) == 8
     assert all(e["seconds"][0] <= e["seconds"][1] <= key["video_seconds"] for e in key["events"])
+
+
+def test_plain_action_words():
+    assert score.plain_action("Pouring [something] into [something]") == "pouring one thing into another"
+    assert score.plain_action("Pushing [something] so it spins") == "pushing something so it spins"
+    assert score.plain_action("Putting [something similar to other things that are already on the table]") == \
+        "putting something like what is already on the table"
+
+
+def test_guessed_times_are_not_scored_as_right():
+    s = score.score_run({"events": [ev(1, "Milk poured", 0, 60, clock="no_clock")]}, KEY)
+    assert (s["found"], s["dated"], s["covered"]) == (1, 0, 0) and s["median_width_min"] is None
+    assert s["events"][0]["range_min"] is None and s["real_span_min"] == [0.33, 2.83]

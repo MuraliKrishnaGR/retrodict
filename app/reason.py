@@ -85,23 +85,43 @@ def _objects(e: dict) -> set:
     return {ev["object_id"] for ev in e["evidence"]}
 
 
+DATED_CLOCKS = {"clock_agrees", "narrowed_by_clock", "replaced_by_clock"}
+
+
+def is_dated(e: dict) -> bool:
+    """True when the event's time comes from a confirmed physical clue (its own clock, or its place in order
+    next to an event that has one). Otherwise its numbers are only the model's guess and are not shown."""
+    return e["dated"] if "dated" in e else e.get("clock") in DATED_CLOCKS
+
+
 def propagate_order(events: list) -> list:
     """Events that share an object happened in the order given (poured INTO the glass, then drunk FROM it),
-    so their time ranges constrain each other: a later step cannot be longer ago than an earlier one.
-    Run AFTER the verifier, so only clocks that survived the trace check are spread. Events on different
-    objects are left alone: their order is a guess, and spreading a guess would invent precision."""
-    for i, a in enumerate(events):
-        for b in events[i + 1:]:
-            if not (_objects(a) & _objects(b)):
-                continue
-            hi = min(b["minutes_before_max"], a["minutes_before_max"])
-            lo = max(a["minutes_before_min"], b["minutes_before_min"])
-            if hi >= b["minutes_before_min"] and hi < b["minutes_before_max"]:
-                b["minutes_before_max"] = hi
-                b["bounded_by"] = f"happened after: {a['description']}"
-            if lo <= a["minutes_before_max"] and lo > a["minutes_before_min"]:
-                a["minutes_before_min"] = lo
-                a["bounded_by"] = f"happened before: {b['description']}"
+    so a dated step dates the steps around it: a later step cannot be longer ago than an earlier one, and an
+    earlier step is at least as long ago as a later one. Only DATED times are spread: spreading the model's
+    guesses would dress a guess up as evidence. Run AFTER the verifier, so only clocks that survived the
+    trace check count. Events on different objects are left alone: their order is a guess."""
+    for e in events:
+        e["dated"] = is_dated(e)
+    for _ in range(len(events)):                     # repeat so a clock reaches along a chain of steps
+        changed = False
+        for i, a in enumerate(events):
+            for b in events[i + 1:]:
+                if not (_objects(a) & _objects(b)):
+                    continue
+                # a is dated, b came after it: b is at most as long ago as a (b keeps any known minimum;
+                # clues that contradict each other are left as they are rather than forced together)
+                if a["dated"] and b["minutes_before_min"] <= a["minutes_before_max"] and \
+                        (not b["dated"] or a["minutes_before_max"] < b["minutes_before_max"]):
+                    b.update(minutes_before_max=a["minutes_before_max"], dated=True,
+                             bounded_by=f"happened after: {a['description']}")
+                    changed = True
+                if b["dated"] and b["minutes_before_min"] > a["minutes_before_min"] and \
+                        (not a["dated"] or b["minutes_before_min"] <= a["minutes_before_max"]):
+                    a["minutes_before_min"] = b["minutes_before_min"]       # undated: a known minimum only
+                    a["bounded_by"] = f"happened before: {b['description']}"
+                    changed = True
+        if not changed:
+            break
     return events
 
 

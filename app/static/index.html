@@ -59,10 +59,10 @@
     </aside>
 
     <section class="ruler-wrap">
-      <h2>Before the photo</h2>
+      <h2>Before the photo, oldest first</h2>
       <div class="ruler" id="ruler"></div>
       <p class="caveat">This is Retrodict's best guess from the clues in the photo. It can be wrong, so don't treat
-        it as proof. Each time is a range ("up to 30 min before"), never an exact moment.</p>
+        it as proof. A time is given only when a clue in the photo supports it, and then as a range, never an exact moment.</p>
     </section>
 
     <section class="detail" id="detail" hidden>
@@ -77,6 +77,17 @@
         <img id="d-views" alt="Close-up of the object in six views">
         <figcaption>What the model was shown: the object in six views, from the original photo.</figcaption>
       </figure>
+    </section>
+
+    <section class="check" id="check" hidden>
+      <h2>How it did, checked against the real video</h2>
+      <p class="c-scene" id="c-scene"></p>
+      <p class="c-sum" id="c-sum"></p>
+      <div class="order" id="c-order"></div>
+      <p class="c-legend"><span class="lg"><span class="sw right"></span>same order as the video</span>
+        <span class="lg"><span class="sw wrong"></span>lines that cross: order wrong</span></p>
+      <p class="c-when" id="c-when"></p>
+      <ul class="c-extra" id="c-extra"></ul>
     </section>
   </section>
 </main>

@@ -52,11 +52,12 @@ main { padding: 0 32px 48px; }
 .empty p { max-width: 62ch; font: 400 22px/1.45 var(--serif); }
 
 .stage { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: 28px;
-         grid-template-areas: "media log" "ruler ruler" "detail detail"; }
+         grid-template-areas: "media log" "ruler ruler" "detail detail" "check check"; }
 .media { grid-area: media; }
 .log { grid-area: log; }
 .ruler-wrap { grid-area: ruler; }
 .detail { grid-area: detail; }
+.check { grid-area: check; }
 
 .tabs { display: flex; gap: 4px; margin-bottom: 8px; }
 .tabs button { border: 0; background: none; color: var(--muted); padding: 6px 10px; border-radius: 6px;
@@ -86,7 +87,7 @@ main { padding: 0 32px 48px; }
        cursor: pointer; font: inherit; border-radius: 6px; }
 .row:hover, .row[aria-pressed="true"] { background: var(--wash); }
 .row .label { font-size: 15px; line-height: 1.3; padding-left: 6px; }
-.track { position: relative; height: 22px; }
+.track { position: relative; height: 22px; margin-right: 22px; }   /* lines up with the axis */
 .track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--line); }
 .band { position: absolute; top: 3px; height: 16px; border-radius: 3px; background: var(--range); opacity: .9; }
 .band.partly { opacity: .55; }
@@ -117,13 +118,54 @@ main { padding: 0 32px 48px; }
 .views figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
 .error { color: var(--no); font-weight: 500; }
 
+/* Steps with no clue to their time: in order only, no invented band. */
+.num { display: inline-block; min-width: 1.6em; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.track.undated::before { border-top-style: dotted; opacity: .6; }
+.unknown { position: absolute; right: 0; top: 1px; font-size: 13px; color: var(--muted); background: var(--paper); padding-left: 8px; }
+.row:hover .unknown, .row[aria-pressed="true"] .unknown { background: var(--wash); }
+.order-note { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+.ruler.orderonly { padding-bottom: 0; }
+.ruler.orderonly .row { grid-template-columns: 1fr auto; max-width: 900px; }
+.chip { font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; white-space: nowrap; }
+
+/* How it did: the real order from the video next to Retrodict's order, joined by lines. */
+.check { border-top: 1.5px solid var(--ink); padding-top: 20px; }
+.check h2 { font-size: 15px; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+.c-scene { color: var(--warn); font-size: 14px; margin: 0 0 8px; }
+.c-sum { font: 400 20px/1.45 var(--serif); margin: 0 0 14px; max-width: 70ch; }
+.order { display: grid; grid-template-columns: minmax(0, 1fr) clamp(36px, 9vw, 110px) minmax(0, 1fr); column-gap: 6px; }
+.col-head { font-size: 13px; font-weight: 700; color: var(--muted); padding-bottom: 6px; }
+.order ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; align-content: start; }
+.order li { display: flex; gap: 4px; font-size: 15px; line-height: 1.3; padding: 4px 6px; border-radius: 6px; background: var(--wash); }
+.order li.missed, .order li.made-up { background: none; outline: 1.5px dashed var(--line); }
+.order li.missed b { color: var(--muted); font-weight: 400; }
+.order li b { font-weight: 500; }
+.links { width: 100%; height: 100%; overflow: visible; }
+.links path { fill: none; stroke-width: 2; }
+.links path.right { stroke: var(--ok); }
+.links path.wrong { stroke: var(--no); stroke-dasharray: 5 4; }
+.status { display: block; font-size: 13px; font-weight: 700; }
+.status.missed { color: var(--no); }
+.witness { display: block; font-size: 13px; color: var(--muted); }
+.c-legend { color: var(--muted); font-size: 14px; display: flex; gap: 4px 8px; flex-wrap: wrap; margin: 12px 0 6px; }
+.lg { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; margin-right: 10px; }
+.sw { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
+.sw.right { border-color: var(--ok); }
+.sw.wrong { border-color: var(--no); border-top-style: dashed; }
+.c-when { font-size: 15px; margin: 6px 0 0; max-width: 80ch; }
+.c-extra { color: var(--muted); padding-left: 18px; margin: 8px 0 0; display: grid; gap: 6px; font-size: 15px; }
+
 @media (max-width: 860px) {
   .top, .runs, main { padding-left: 16px; padding-right: 16px; }
-  .stage { grid-template-columns: 1fr; grid-template-areas: "media" "log" "ruler" "detail"; }
+  .stage { grid-template-columns: 1fr; grid-template-areas: "media" "log" "ruler" "detail" "check"; }
   .detail { grid-template-columns: 1fr; }
   .row { grid-template-columns: 1fr; gap: 4px; }
+  .ruler.orderonly .row { grid-template-columns: 1fr; }
+  .chip { justify-self: start; margin-left: 6px; }
   .axis { margin-left: 22px; }
+  .track { margin-left: 22px; }
   .story { font-size: 20px; }
+  .order li { font-size: 14px; flex-direction: column; gap: 0; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .band { transition: width .4s ease, left .4s ease; }

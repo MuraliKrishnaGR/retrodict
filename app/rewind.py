@@ -17,6 +17,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from app.eraser import erase, removal_mask
+from app.reason import is_dated
 
 FPS = 24
 INTRO, PER_EVENT, OUTRO = 1.2, 1.6, 1.5      # seconds: long enough to read each caption (5 events ~ 10 s)
@@ -35,10 +36,13 @@ def font(size: int):
 
 
 def when_text(e: dict) -> str:
+    """Times come only from clues in the photo; without one the model's guess is not shown as a time."""
     lo, hi = e["minutes_before_min"], e["minutes_before_max"]
 
     def fmt(m):
         return f"{m:g} min" if m < 120 else f"{m / 60:.1f} h"
+    if not is_dated(e):
+        return f"at least {fmt(lo)} before" if lo > 0 else "time unknown"
     if lo == 0:
         return f"up to {fmt(hi)} before"
     return f"{lo:g} to {hi:g} min before" if hi < 120 else f"{fmt(lo)} to {fmt(hi)} before"

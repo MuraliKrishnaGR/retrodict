@@ -67,9 +67,14 @@ def test_captions_are_short_and_times_honest():
     assert short("Someone tore open the purple and brown brownie packet, exposing the layered brownie inside") \
         == "Someone tore open the purple and brown brownie packet"
     assert short("Tea was poured.") == "Tea was poured"
-    assert when_text({"minutes_before_min": 0, "minutes_before_max": 30}) == "up to 30 min before"
-    assert when_text({"minutes_before_min": 0, "minutes_before_max": 240}) == "up to 4.0 h before"
-    assert when_text({"minutes_before_min": 3, "minutes_before_max": 10}) == "3 to 10 min before"
+    dated = {"clock": "clock_agrees"}
+    assert when_text({"minutes_before_min": 0, "minutes_before_max": 30, **dated}) == "up to 30 min before"
+    assert when_text({"minutes_before_min": 0, "minutes_before_max": 240, **dated}) == "up to 4.0 h before"
+    assert when_text({"minutes_before_min": 3, "minutes_before_max": 10, **dated}) == "3 to 10 min before"
+    # no clue in the photo: the model's guess is not shown as a time
+    assert when_text({"minutes_before_min": 0, "minutes_before_max": 60, "clock": "no_clock"}) == "time unknown"
+    assert when_text({"minutes_before_min": 0, "minutes_before_max": 60, "clock": "clock_not_applied"}) == "time unknown"
+    assert when_text({"minutes_before_min": 5, "minutes_before_max": 60, "dated": False}) == "at least 5 min before"
 
 
 def test_rewind_changes_the_object_the_event_is_about(tmp_path):

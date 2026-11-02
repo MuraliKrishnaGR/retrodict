@@ -8,14 +8,17 @@ Two sources of truth, kept apart:
 
 What is measured, all from the photo's point of view (minutes before the photo):
 - found: key events Retrodict describes (matched by the key's patterns, one Retrodict event per key event);
-- covered: of those, how many have a time range that contains the real time;
-- width: how wide those ranges are, next to the real time (a range of "up to 60 min" for something
-  2 minutes ago is right but not useful);
+- dated / covered: how many found events got a time from a clue in the photo, and how many of those
+  times contain the real time (the model's guesses are not times and are not scored as right);
+- width: how wide those times are (a range of "up to 60 min" for something 2 minutes ago is right but
+  not useful);
 - order: pairs of found events in the right order;
 - unsupported: Retrodict events that match nothing in the key."""
 import json
 import re
 from pathlib import Path
+
+from app.reason import is_dated
 
 # V-JEPA 2 (Something-Something v2) labels -> the kinds of action they show. Labels about the camera or
 # about holding still ("Showing that [something] is inside [something]") show no action and are left out.
@@ -66,8 +69,9 @@ def score_run(result: dict, key: dict) -> dict:
         row = {"id": k["id"], "what": k["what"], "true_min": [t_lo, t_hi], "found": e is not None}
         if e:
             lo, hi = e["minutes_before_min"], e["minutes_before_max"]
-            row.update(event=e["id"], text=e["description"], range_min=[lo, hi],
-                       covered=lo <= t_hi and hi >= t_lo, width=round(hi - lo, 1))
+            dated = is_dated(e)                    # a time counts only if a clue in the photo gave one
+            row.update(event=e["id"], text=e["description"], dated=dated, range_min=[lo, hi] if dated else None,
+                       covered=dated and lo <= t_hi and hi >= t_lo, width=round(hi - lo, 1) if dated else None)
         rows.append(row)
     found = [r for r in rows if r["found"]]
     # order: Retrodict lists events oldest first; compare every pair of found events with the real order
@@ -88,13 +92,15 @@ def score_run(result: dict, key: dict) -> dict:
                 wrong.append(f"{first['id']} happened before {then['id']}")
     used = {r["event"] for r in found}
     unsupported = [{"event": e["id"], "text": e["description"]} for e in events if e["id"] not in used]
-    covered = [r for r in found if r["covered"]]
+    dated = [r for r in found if r["dated"]]
+    by_event = {r["event"]: r["id"] for r in found}
     return {
         "events": rows,
+        "retro": [{"event": e["id"], "text": e["description"], "key": by_event.get(e["id"])} for e in events],
         "found": len(found), "total": len(rows),
-        "covered": len(covered),
-        "median_width_min": _median([r["width"] for r in found]),
-        "median_true_min": _median([sum(r["true_min"]) / 2 for r in found]),
+        "dated": len(dated), "covered": sum(r["covered"] for r in dated),
+        "median_width_min": _median([r["width"] for r in dated]),
+        "real_span_min": [min(r["true_min"][0] for r in rows), max(r["true_min"][1] for r in rows)],
         "order_agree": agree, "order_pairs": pairs, "order_wrong": wrong,
         "unsupported": unsupported,
     }
@@ -123,8 +129,8 @@ def witness_check(key: dict, watched: dict, min_prob: float = WITNESS_MIN_PROB, 
         near = [w for w in windows if w[0] <= e + slack and w[1] >= s - slack and w[2] & set(k["witness"])]
         best = max(near, key=lambda w: w[3][1]) if near else None
         rows.append({"id": k["id"], "what": k["what"], "can_see": True, "seen": bool(near),
-                     "label": best[3][0] if best else None, "prob": best[3][1] if best else None,
-                     "at": [best[0], best[1]] if best else None})
+                     "label": best[3][0] if best else None, "plain": plain_action(best[3][0]) if best else None,
+                     "prob": best[3][1] if best else None, "at": [best[0], best[1]] if best else None})
     # how often the witness reports an action where the key has none (its false alarms)
     acting = [w for w in windows if w[2]]
     spans = [(k["seconds"][0] - slack, k["seconds"][1] + slack) for k in key["events"]]
@@ -133,6 +139,17 @@ def witness_check(key: dict, watched: dict, min_prob: float = WITNESS_MIN_PROB, 
     return {"events": rows, "seen": sum(r["seen"] for r in seeable), "seeable": len(seeable),
             "action_windows": len(acting), "stray_windows": len(stray),
             "stray": [{"at": [w[0], w[1]], "label": w[3][0], "prob": w[3][1]} for w in stray]}
+
+
+def plain_action(label: str) -> str:
+    """V-JEPA 2 never names objects (it learned actions from videos whose labels say 'something'), so its
+    labels read 'Pouring [something] into [something]'. For people: 'pouring one thing into another'."""
+    text = label.replace("[something similar to other things that are already on the table]",
+                         "something like what is already on the table")
+    if text.count("[something]") == 2:
+        text = text.replace("[something]", "one thing", 1).replace("[something]", "another", 1)
+    text = text.replace("[something]", "something")
+    return text[:1].lower() + text[1:]
 
 
 def _median(xs):

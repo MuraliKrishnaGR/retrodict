@@ -36,19 +36,27 @@ def main():
         if not r["found"]:
             print(f"  MISSED   {r['what']}  (really {real})")
         else:
-            ok = "in range" if r["covered"] else "OUT OF RANGE"
-            print(f"  FOUND    {r['what']}  (really {real}; Retrodict {r['event']}: {mins(*r['range_min'])}, {ok})")
+            if not r["dated"]:
+                when = "no time given (no clue in the photo)"
+            else:
+                when = f"{mins(*r['range_min'])}, " + ("in range" if r["covered"] else "OUT OF RANGE")
+            print(f"  FOUND    {r['what']}  (really {real}; Retrodict {r['event']}: {when})")
     for u in s["unsupported"]:
         print(f"  NOT IN KEY  {u['event']}: {u['text']}")
 
-    print(f"\nFound {s['found']} of {s['total']} real events; {s['covered']} of {s['found']} time ranges contain the real time.")
-    if s["median_width_min"] is not None:
-        print(f"Typical range is {s['median_width_min']:g} min wide for events about {s['median_true_min']:g} min old.")
+    lo, hi = s["real_span_min"]
+    print(f"\nFound {s['found']} of {s['total']} real events. They really happened {lo:g}-{hi:g} min before the photo.")
+    if s["dated"]:
+        print(f"Times: {s['dated']} of {s['found']} found events were dated by a clue; {s['covered']} of those contain "
+              f"the real time; typical width {s['median_width_min']:g} min.")
+    else:
+        print("Times: no clue in the photo dated any of them, so Retrodict gave no times (it says 'time unknown').")
     print(f"Order: {s['order_agree']} of {s['order_pairs']} pairs right"
           + (f" (wrong: {'; '.join(s['order_wrong'])})" if s["order_wrong"] else "") + ".")
     print(f"Events not in the key: {len(s['unsupported'])}.")
 
-    out = {"key": a.key, "run": str(run), "score": s}
+    out = {"key": a.key, "run": str(run), "scene": {"video": key["video"], "split": key.get("split", ""),
+                                                   "video_seconds": key["video_seconds"]}, "score": s}
     if a.witness:
         w = score.witness_check(key, json.loads(Path(a.witness).read_text(encoding="utf-8")))
         out["witness"] = w
@@ -57,7 +65,7 @@ def main():
             if not r["can_see"]:
                 print(f"  CAN'T SEE  {r['what']}  (no such action in its vocabulary)")
             elif r["seen"]:
-                print(f"  SAW        {r['what']}  as \"{r['label']}\" at {r['at'][0]:g}-{r['at'][1]:g} s ({r['prob']:.2f})")
+                print(f"  SAW        {r['what']}  as \"{r['plain']}\" at {r['at'][0]:g}-{r['at'][1]:g} s ({r['prob']:.2f})")
             else:
                 print(f"  DIDN'T SEE {r['what']}")
         print(f"Saw {w['seen']} of the {w['seeable']} events it has words for. "

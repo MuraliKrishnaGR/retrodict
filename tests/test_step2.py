@@ -59,20 +59,38 @@ def test_steps_on_the_same_object_share_their_times():
     from app.reason import propagate_order
     events = [
         {"id": "e1", "description": "milk poured into the glass", "minutes_before_min": 0, "minutes_before_max": 10,
-         "evidence": [{"object_id": "o4", "observation": "steam"}]},
+         "clock": "narrowed_by_clock", "evidence": [{"object_id": "o4", "observation": "steam"}]},
         {"id": "e2", "description": "some milk was drunk", "minutes_before_min": 0, "minutes_before_max": 60,
          "evidence": [{"object_id": "o4", "observation": "film above the level"}]},
         {"id": "e3", "description": "packet opened", "minutes_before_min": 0, "minutes_before_max": 60,
          "evidence": [{"object_id": "o5", "observation": "torn"}]}]
     propagate_order(events)
     assert events[1]["minutes_before_max"] == 10 and "milk poured" in events[1]["bounded_by"]
+    assert events[1]["dated"] and not events[2]["dated"]   # dated by its place after a dated step
     assert events[2]["minutes_before_max"] == 60 and "bounded_by" not in events[2]
     lo = [{"id": "a", "description": "stain made", "minutes_before_min": 30, "minutes_before_max": 1440,
-           "evidence": [{"object_id": "o1", "observation": "x"}]},
+           "clock": "clock_agrees", "evidence": [{"object_id": "o1", "observation": "x"}]},
           {"id": "b", "description": "cup lifted", "minutes_before_min": 40, "minutes_before_max": 100,
-           "evidence": [{"object_id": "o1", "observation": "y"}]}]
+           "clock": "clock_agrees", "evidence": [{"object_id": "o1", "observation": "y"}]}]
     propagate_order(lo)
     assert lo[0]["minutes_before_min"] == 40              # what came first is at least as long ago
+
+
+def test_guesses_are_never_spread_as_times():
+    """No clock anywhere: the model's guessed 'up to 60' and 'up to 30' must not date each other."""
+    from app.reason import propagate_order
+    ev = lambda i, hi, clock="no_clock": {"id": i, "description": i, "minutes_before_min": 0, "minutes_before_max": hi,
+                                         "clock": clock, "evidence": [{"object_id": "o1", "observation": "x"}]}
+    events = propagate_order([ev("a", 60), ev("b", 30), ev("c", 90)])
+    assert [e["minutes_before_max"] for e in events] == [60, 30, 90]
+    assert not any(e["dated"] or e.get("bounded_by") for e in events)
+    # a clock reaches along a chain: a (steam, 0-10) -> b -> c, all on the same glass
+    events = propagate_order([ev("a", 10, "narrowed_by_clock"), ev("b", 60), ev("c", 90)])
+    assert [e["minutes_before_max"] for e in events] == [10, 10, 10] and all(e["dated"] for e in events)
+    # a dated LATER step gives an undated earlier one a minimum only
+    late = ev("z", 10, "clock_agrees"); late["minutes_before_min"] = 4
+    events = propagate_order([ev("y", 60), late])
+    assert events[0]["minutes_before_min"] == 4 and not events[0]["dated"]
 
 
 def test_verifier_rejects_and_penalises():
