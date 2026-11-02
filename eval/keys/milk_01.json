@@ -1,0 +1,27 @@
+{
+  "video": "milk_01.mp4",
+  "photos": ["milk_photo.jpeg", "milk_photo_original.jpeg"],
+  "video_seconds": 159,
+  "photo_delay_min": [0, 1],
+  "split": "dev",
+  "source": "Transcribed from notes.txt, written from the video frames by the person who filmed it. Dev scene: it was used while tuning, so its scores are not a fair test; the test scenes are filmed later and keyed before any run.",
+  "match_note": "Retrodict's events are matched to these by the 'match' patterns (regular expressions on the event text), written here before scoring. 'witness' lists the V-JEPA 2 action kinds that would count as seeing it; empty = V-JEPA 2 has no word for it.",
+  "events": [
+    {"id": "pour", "what": "hot milk poured from the pan into the steel glass", "seconds": [9, 17],
+     "match": "\\bpour", "witness": ["add_into"]},
+    {"id": "pan_down", "what": "milk pan put down on the right side of the counter", "seconds": [18, 21],
+     "match": "\\b(pan|pot|saucepan)\\b.*\\b(put|set|placed|left)\\b", "witness": ["put_down"]},
+    {"id": "sugar", "what": "sugar added with a white spoon, which was left inside the jar", "seconds": [33, 35],
+     "match": "\\b(sugar|powder|scoop\\w*|sweeten\\w*)\\b", "witness": ["add_into"]},
+    {"id": "stir", "what": "drink stirred with a second spoon", "seconds": [54, 70],
+     "match": "\\bstir", "witness": ["stir"]},
+    {"id": "spoon_lid", "what": "the stirring spoon left resting on the jar lid, still wet", "seconds": [72, 74],
+     "match": "\\blid\\b", "witness": ["put_down"]},
+    {"id": "wrapper", "what": "chocolate wrapper opened at one end", "seconds": [94, 104],
+     "match": "\\b(open\\w*|tor[en]|unwrap\\w*)\\b", "witness": ["open"]},
+    {"id": "bite", "what": "first bite of chocolate eaten, bar put back", "seconds": [99, 129],
+     "match": "\\b(bite|bitten|eaten|ate)\\b", "witness": []},
+    {"id": "drink", "what": "some of the drink drunk, glass put back (level lower)", "seconds": [118, 136],
+     "match": "\\b(drank|drunk|sipped|sip|drinking)\\b", "witness": ["pick_up", "put_down"]}
+  ]
+}
