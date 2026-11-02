@@ -10,6 +10,20 @@ from app import config
 from app.cache import DiskCache, make_key
 
 
+def clean_box(box, mask) -> list:
+    """A box that always lies inside the image with left <= right and top <= bottom.
+    SAM's own box can poke slightly outside the photo (e.g. a jar touching the top edge gives a
+    negative top), so the tight box around the mask is used, falling back to the clamped SAM box."""
+    h, w = mask.shape
+    ys, xs = np.nonzero(mask)
+    if len(xs):
+        return [float(xs.min()), float(ys.min()), float(xs.max() + 1), float(ys.max() + 1)]
+    l, t, r, b = (float(v) for v in box)
+    l, r = sorted((min(max(l, 0.0), w), min(max(r, 0.0), w)))
+    t, b = sorted((min(max(t, 0.0), h), min(max(b, 0.0), h)))
+    return [round(l, 1), round(t, 1), round(r, 1), round(b, 1)]
+
+
 class LocalSAM:
     def __init__(self, cache: DiskCache | None = None, model=None, processor=None,
                  model_id: str = config.SAM_MODEL_ID):
@@ -49,7 +63,8 @@ class LocalSAM:
             if not meta["items"]:
                 return []
             arr = np.load(self.cache.path_for("sam", key, "npz"))["masks"]
-            return [dict(it, mask=arr[i]) for i, it in enumerate(meta["items"])]
+            return [dict(it, mask=arr[i], bbox=clean_box(it["bbox"], arr[i]))
+                    for i, it in enumerate(meta["items"])]
 
         img = Image.open(io.BytesIO(jpeg)).convert("RGB")
         model, processor = self._load()
@@ -66,7 +81,7 @@ class LocalSAM:
         boxes = np.asarray(res["boxes"], dtype=float)
         scores = np.asarray(res["scores"], dtype=float)
         order = np.argsort(-scores)[:config.SAM_MAX_INSTANCES]
-        items = [{"object_id": str(i), "bbox": [round(float(v), 1) for v in boxes[j]],
+        items = [{"object_id": str(i), "bbox": clean_box(boxes[j], masks[j]),
                   "score": round(float(scores[j]), 4), "mask": masks[j]}
                  for i, j in enumerate(order)]
 
