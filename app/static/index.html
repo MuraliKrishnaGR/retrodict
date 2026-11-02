@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retrodict</title>
+<meta name="description" content="From one photo, what most likely happened before it was taken.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Retrodict</h1>
+    <p>What most likely happened before this photo was taken.</p>
+  </div>
+  <div class="actions">
+    <label class="btn primary">Choose a photo
+      <input id="pick" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+    </label>
+    <label class="btn">Take a photo
+      <input id="snap" type="file" accept="image/*" capture="environment" hidden>
+    </label>
+  </div>
+</header>
+
+<nav class="runs" aria-label="Earlier photos">
+  <div id="runs" class="strip"></div>
+</nav>
+
+<main id="main">
+  <section class="empty" id="empty">
+    <p>Choose or take a photo of a table, a counter or a desk. Retrodict finds the objects, reads the traces
+      they carry (steam, crumbs, a torn wrapper, a lowered drink) and works backward to what happened, with a
+      time range for each step and the evidence behind it.</p>
+  </section>
+
+  <section class="stage" id="stage" hidden>
+    <div class="media">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-view="rewind" aria-selected="true">Rewind</button>
+        <button role="tab" data-view="photo" aria-selected="false">Photo</button>
+        <button role="tab" data-view="objects" aria-selected="false">Objects found</button>
+      </div>
+      <figure class="frame">
+        <img id="photo" alt="The photo being reconstructed">
+        <video id="rewind" controls muted playsinline loop hidden></video>
+        <figcaption id="note"></figcaption>
+      </figure>
+      <p class="story" id="summary"></p>
+    </div>
+
+    <aside class="log" aria-live="polite">
+      <h2>Investigation</h2>
+      <ol id="steps" class="steps"></ol>
+      <ol id="moves" class="moves"></ol>
+    </aside>
+
+    <section class="ruler-wrap">
+      <h2>Before the photo</h2>
+      <div class="ruler" id="ruler"></div>
+      <p class="caveat">This is Retrodict's best guess from the clues in the photo. It can be wrong, so don't treat
+        it as proof. Each time is a range ("up to 30 min before"), never an exact moment.</p>
+    </section>
+
+    <section class="detail" id="detail" hidden>
+      <div class="detail-text">
+        <p class="when" id="d-when"></p>
+        <h3 id="d-desc"></h3>
+        <p class="physics" id="d-physics" hidden></p>
+        <ul class="evidence" id="d-evidence"></ul>
+        <ul class="alts" id="d-alts"></ul>
+      </div>
+      <figure class="views">
+        <img id="d-views" alt="Close-up of the object in six views">
+        <figcaption>What the model was shown: the object in six views, from the original photo.</figcaption>
+      </figure>
+    </section>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

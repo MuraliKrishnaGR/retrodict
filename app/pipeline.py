@@ -48,18 +48,27 @@ def photo_note(photo_path) -> str:
 
 
 class Trace:
-    def __init__(self):
+    def __init__(self, progress=None):
         self.steps = []
+        self.progress = progress or (lambda kind, data: None)
+
+    def start(self, name: str):
+        self.progress("step_started", {"step": name})
+        return time.time()
 
     def step(self, name: str, detail: str, started: float):
-        self.steps.append({"step": name, "detail": detail, "seconds": round(time.time() - started, 1)})
+        s = {"step": name, "detail": detail, "seconds": round(time.time() - started, 1)}
+        self.steps.append(s)
+        self.progress("step_done", s)
 
 
-async def run_photo(models, photo_path, out_dir) -> dict:
+async def run_photo(models, photo_path, out_dir, progress=None) -> dict:
+    """progress(kind, data), if given, is told about every step and every agent move as it happens
+    (the web page shows the investigation live)."""
     out_dir = Path(out_dir)
-    trace = Trace()
+    trace = Trace(progress)
 
-    t = time.time()
+    t = trace.start("perceive")
     scene = await perceive(models, photo_path, out_dir)
     trace.step("perceive", f"{len(scene['objects'])} objects masked", t)
 
@@ -75,16 +84,16 @@ async def run_photo(models, photo_path, out_dir) -> dict:
               "mask": np.array(Image.open(out_dir / o["mask_png"])) > 127} for o in scene["objects"]]
     objects = [dict(o) for o in scene["objects"]]
 
-    t = time.time()
+    t = trace.start("read")
     scene_ctx = Scene(photo_path, out_dir, img, jpeg, objects, drawn, {})
     states = await read_state(models, objects, scene_ctx.detail_jpeg)
     scene_ctx.states = states
     n_traces = sum(len(s["traces"]) for s in states.values())
     trace.step("read", f"{len(states)} objects read, {n_traces} physical traces seen", t)
 
-    t = time.time()
+    t = trace.start("investigate")
     try:
-        found = await investigate(models, scene_ctx)
+        found = await investigate(models, scene_ctx, progress=trace.progress)
     except Exception as e:                          # a broken agent answer must not sink the run
         save_details(e)                             # ...but keep the exact failing line for fixing it
         found = {"finished": False, "moves": [], "error": f"{type(e).__name__}: {str(e)[:200]}"}
@@ -100,7 +109,7 @@ async def run_photo(models, photo_path, out_dir) -> dict:
     trace.step("investigate", f"{detail}; {len(timeline['events'])} events, {clocked} dated by a trace clock", t)
     result.update(summary=timeline["summary"], objects=objects, states=states)
 
-    t = time.time()
+    t = trace.start("verify")
     cited = list(dict.fromkeys(ev["object_id"] for e in timeline["events"] for ev in e["evidence"]))
     image = scene_ctx.evidence_jpeg(cited) if cited else scene_ctx.sheet_jpeg()
     checked = await verify(models, image, timeline["events"], scene_ctx.labels)

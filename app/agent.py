@@ -193,7 +193,7 @@ class Scene:
         return new_ids
 
 
-async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES) -> dict:
+async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress=None) -> dict:
     """Runs the tool loop. Returns {'summary','events','moves','finished'}; events are grounded and clocked."""
     history, moves, checked = [], [], set()
     image, image_note = scene.sheet_jpeg(), "the scene with numbered objects on top and close-ups below."
@@ -250,6 +250,8 @@ async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES) -> dict:
                 if e.get("undo") not in UNDO_KINDS:
                     e["undo"] = "mark"
             moves.append({"move": "finish", "thought": step.thought, "result": f"{len(events)} events"})
+            if progress:
+                progress("move", moves[-1])
             return {"summary": plain_text(step.summary, scene.states, scene.labels), "events": events,
                     "moves": moves, "finished": True}
         else:
@@ -257,5 +259,7 @@ async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES) -> dict:
 
         moves.append({"move": action, "thought": step.thought, "result": result,
                       "object_id": step.object_id, "phrase": step.phrase, "trace": step.trace})
+        if progress:
+            progress("move", moves[-1])
         history.append(f"{turn + 1}. {action} -> {result}")
     return {"summary": "", "events": [], "moves": moves, "finished": False}
