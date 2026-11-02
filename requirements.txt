@@ -8,3 +8,7 @@ pytest>=8.0
 torch>=2.6
 torchvision>=0.21
 transformers==5.22.1
+# Rewind clip: inpainting and an H.264 video that plays in browsers (imageio-ffmpeg ships ffmpeg itself)
+opencv-python-headless>=4.10
+imageio>=2.34
+imageio-ffmpeg>=0.5
