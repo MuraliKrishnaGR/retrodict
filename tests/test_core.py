@@ -210,3 +210,51 @@ def test_error_hints():
     assert "set_key" in explain(e)
     e2 = Exception("model x not found"); e2.status_code = 404
     assert "find_model" in explain(e2)
+
+
+def test_unexpected_error_saves_details_and_names_no_assistant(tmp_path, monkeypatch):
+    from app import config
+    from app.errors import explain
+    monkeypatch.setattr(config, "CACHE_DIR", tmp_path)
+    try:
+        raise ValueError("y1 must be greater than or equal to y0")
+    except ValueError as e:
+        msg = explain(e)
+    assert "claude" not in msg.lower() and "last_error.txt" in msg
+    saved = (tmp_path / "last_error.txt").read_text(encoding="utf-8")
+    assert "Traceback" in saved and "y1 must be greater" in saved
+
+
+def test_event_carries_the_clock_rule_behind_its_range():
+    from app.reason import ground_events
+    from app.schemas import Timeline
+    tl = Timeline.model_validate({"summary": "s", "events": [
+        {"id": "x", "description": "tea was poured", "minutes_before_min": 0, "minutes_before_max": 60,
+         "evidence": [{"object_id": "mug_1", "observation": "steam rising"}], "trace": "steam"},
+        {"id": "y", "description": "packet was opened", "minutes_before_min": 0, "minutes_before_max": 60,
+         "evidence": [{"object_id": "packet_1", "observation": "torn top"}], "trace": None}]})
+    ev = {e["description"]: e for e in ground_events(tl, {"mug_1", "packet_1"})}
+    assert "steam" in ev["tea was poured"]["clock_rule"]
+    assert ev["tea was poured"]["minutes_before_max"] == 10
+    assert ev["packet was opened"]["clock_rule"] is None
+
+
+def test_box_from_sam_stays_inside_photo_for_object_at_top_edge():
+    import numpy as np
+    from app.clients.sam_local import clean_box
+    m = np.zeros((100, 200), bool); m[0:30, 50:90] = True          # a jar touching the top edge
+    assert clean_box([49.6, -0.4, 90.2, 30.1], m) == [50.0, 0.0, 90.0, 30.0]
+    empty = np.zeros((100, 200), bool)                              # no mask: clamp SAM's box
+    assert clean_box([-5, -3, 250, 40], empty) == [0.0, 0.0, 200.0, 40.0]
+    assert clean_box([60, 50, 10, 20], empty) == [10.0, 20.0, 60.0, 50.0]
+
+
+def test_overlay_draws_labels_for_objects_at_the_top_edge():
+    import numpy as np
+    from PIL import Image
+    from app.imaging import overlay
+    img = Image.new("RGB", (200, 100), (40, 40, 40))
+    m = np.zeros((100, 200), bool); m[0:30, 50:90] = True
+    out = overlay(img, [{"id": "o1", "label": "jar", "mask": m, "bbox": [50.0, 0.0, 90.0, 30.0]}],
+                  tint=0.12, outline=3)
+    assert out.size == (200, 100)

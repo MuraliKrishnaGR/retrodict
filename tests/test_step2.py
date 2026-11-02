@@ -64,13 +64,26 @@ def test_verifier_rejects_and_penalises():
 
 
 class StoryModels:
-    """Fake models for a tea scene: SAM finds a mug and a packet; Spark answers per pipeline step."""
-    def __init__(self):
-        self.tags = []
+    """Fake models for a tea scene: SAM finds a mug and a packet (and a spoon, if searched);
+    Spark answers per pipeline step. `agent` scripts the investigator's moves, turn by turn."""
+    def __init__(self, agent=None, trace_verdict="yes"):
+        self.tags, self.images, self.prompts = [], {}, {}
+        self.agent = agent
+        self.trace_verdict = trace_verdict          # what the verifier says when asked to confirm a trace
+
+    STORY = {"summary": "Someone had tea and biscuits.", "events": [
+                {"id": "a", "description": "tea was poured", "minutes_before_min": 5, "minutes_before_max": 200,
+                 "trace": "liquid_film", "evidence": [{"object_id": "o1", "observation": "skin on the tea"}],
+                 "confidence": 0.7},
+                {"id": "b", "description": "packet was opened", "minutes_before_min": 0, "minutes_before_max": 30,
+                 "trace": None, "evidence": [{"object_id": "o2", "observation": "wrapper torn"}],
+                 "confidence": 0.8},
+                {"id": "c", "description": "sugar was added", "minutes_before_min": 0, "minutes_before_max": 30,
+                 "evidence": [{"object_id": "o1", "observation": "sugar spoon in mug"}], "confidence": 0.5}]}
 
     async def sam_segment(self, jpeg, w, h, concept):
         m = np.zeros((h, w), bool)
-        boxes = {"mug": (10, 10, 40, 40), "packet": (50, 20, 90, 60)}
+        boxes = {"mug": (10, 10, 40, 40), "packet": (50, 20, 90, 60), "spoon": (12, 50, 40, 58)}
         if concept not in boxes:
             return []
         l, t, r, b = boxes[concept]
@@ -79,7 +92,15 @@ class StoryModels:
 
     async def spark_json(self, prompt, schema, jpeg=None, tag=""):
         self.tags.append(tag)
+        self.images[tag] = jpeg
+        self.prompts[tag] = prompt
+        if tag == "summary":                            # text only: rewrites the story from what survived
+            assert "sugar was added" in prompt.split("do not mention them")[1]
+            return schema.model_validate({"summary": "Someone poured tea and opened a packet of biscuits."})
         assert jpeg, "every step must look at the image"
+        if tag.startswith("agent_"):
+            script = self.agent if self.agent is not None else [{"action": "finish", **self.STORY}]
+            return schema.model_validate(script[int(tag.split("_")[1])])
         replies = {
             "list_objects": {"objects": [{"name": "mug"}, {"name": "packet"}]},
             "read_state": {"objects": [
@@ -88,24 +109,18 @@ class StoryModels:
                 {"object_id": "o2", "what": "biscuit packet", "observations": ["torn open", "crumbs"],
                  "traces": ["open_package", "crumbs", "glitter"], "confidence": 0.9},
                 {"object_id": "o9", "what": "imaginary", "observations": [], "traces": []}]},
-            "reason": {"summary": "Someone had tea and biscuits.", "events": [
-                {"id": "a", "description": "tea was poured", "minutes_before_min": 5, "minutes_before_max": 200,
-                 "trace": "liquid_film", "evidence": [{"object_id": "o1", "observation": "skin on the tea"}],
-                 "confidence": 0.7},
-                {"id": "b", "description": "packet was opened", "minutes_before_min": 0, "minutes_before_max": 30,
-                 "trace": None, "evidence": [{"object_id": "o2", "observation": "wrapper torn"}],
-                 "confidence": 0.8},
-                {"id": "c", "description": "sugar was added", "minutes_before_min": 0, "minutes_before_max": 30,
-                 "evidence": [{"object_id": "o1", "observation": "sugar spoon in mug"}], "confidence": 0.5}]},
+            "reason": self.STORY,
         }
         if tag == "verify":
-            verdict = {"skin on the tea": "yes", "wrapper torn": "yes", "sugar spoon in mug": "no"}
+            verdict = {"skin on the tea": "yes", "wrapper torn": "yes", "sugar spoon in mug": "no",
+                       "used spoon lying on the table": "yes"}
             checks = []
             for line in prompt.splitlines():
                 if line.startswith("- c"):
                     cid, text = line[2:].split(": ", 1)
                     obs = text.split("): ", 1)[1]
-                    checks.append({"claim_id": cid, "verdict": verdict[obs]})
+                    v = self.trace_verdict if obs.startswith("shows ") else verdict[obs]
+                    checks.append({"claim_id": cid, "verdict": v})
             return schema.model_validate({"checks": checks})
         return schema.model_validate(replies[tag])
 
@@ -116,8 +131,9 @@ def test_full_pipeline(tmp_path):
     models = StoryModels()
     res = asyncio.run(run_photo(models, photo, tmp_path / "out"))
 
-    assert models.tags == ["list_objects", "read_state", "reason", "verify"]   # 4 model calls per photo
-    assert [s["step"] for s in res["trace"]] == ["perceive", "read", "reason", "verify"]
+    assert models.tags == ["list_objects", "read_state", "agent_0", "verify", "summary"]  # agent finished at once;
+                                                    # the verifier rejected an event, so the summary is rewritten
+    assert [s["step"] for s in res["trace"]] == ["perceive", "read", "investigate", "verify"]
     assert set(res["states"]) == {"o1", "o2"}                                  # imaginary o9 dropped
     assert res["states"]["o1"]["traces"] == ["liquid_film"]
     assert res["states"]["o2"]["traces"] == ["open_package", "crumbs"]        # unknown 'glitter' dropped
@@ -130,7 +146,8 @@ def test_full_pipeline(tmp_path):
     assert [e["description"] for e in res["rejected"]] == ["sugar was added"]  # caught by the verifier
 
     saved = json.loads((tmp_path / "out" / "result.json").read_text())
-    assert saved["summary"] == "Someone had tea and biscuits."
+    assert saved["summary"] == "Someone poured tea and opened a packet of biscuits."   # no rejected story in it
+    assert [e["id"] for e in saved["events"]] == ["e1", "e2"]
     assert (tmp_path / "out" / "sheet.jpg").exists()
 
 
@@ -218,3 +235,153 @@ def test_contact_sheet_keeps_every_colour(name):
     for i in range(len(COLORS)):
         shift = np.abs(sheet[20, i * 40 + 20] - np.array(rgb)).max()
         assert shift <= 0.12 * 255 + 3, f"{name} under mask colour {i}: shifted by {shift}"
+
+
+def _photo(tmp_path, name="tea.jpg", size=(100, 80)):
+    photo = tmp_path / name
+    Image.new("RGB", size, (180, 170, 160)).save(photo)
+    return photo
+
+
+def test_agent_zooms_searches_and_cites_what_it_found(tmp_path):
+    script = [
+        {"thought": "is there liquid?", "action": "zoom", "object_id": "o1"},
+        {"thought": "a used spoon would date the stirring", "action": "search", "phrase": "Spoon"},
+        {"thought": "how long does a skin take?", "action": "clock", "trace": "liquid_film"},
+        {"thought": "enough evidence", "action": "finish", "summary": "Someone had tea; o1 cooled.",
+         "events": [{"id": "x", "description": "tea was stirred with o3", "minutes_before_min": 5,
+                     "minutes_before_max": 60, "trace": "liquid_film", "undo": "Remove",
+                     "evidence": [{"object_id": "o3", "observation": "used spoon lying on the table"}]}]},
+    ]
+    photo = _photo(tmp_path, size=(2000, 1600))     # shrunk to 1024 for SAM; zoom must use the original
+    models = StoryModels(agent=script)
+    res = asyncio.run(run_photo(models, photo, tmp_path / "out"))
+
+    assert models.tags == ["list_objects", "read_state", "agent_0", "agent_1", "agent_2", "agent_3", "verify"]
+    assert [m["move"] for m in res["moves"]] == ["zoom", "search", "clock", "finish"]
+    assert models.images["agent_1"] != models.images["agent_0"]          # turn after zoom sees the close-up
+    zoom = Image.open(__import__("io").BytesIO(models.images["agent_1"]))
+    half = (zoom.width - 8) // 2                    # as photographed | contrast boosted, side by side
+    assert 80 < half < 100                          # o1 is 30 px wide in the 1024 copy (+ margin ~45 px);
+                                                    # from the 2000 px original it is about twice that
+    assert zoom.height > half                       # the space above the mug is included (steam rises)
+    assert res["moves"][1]["result"] == "found o3 (spoon)"                # SAM found it, it became o3
+    assert res["moves"][2]["result"].startswith("liquid_film: 10 to 90 min")
+    assert [o["id"] for o in res["objects"]] == ["o1", "o2", "o3"] and res["objects"][2]["found_by"] == "agent"
+    e = res["events"][0]
+    assert e["undo"] == "remove" and e["status"] == "verified"
+    assert e["description"] == "tea was stirred with the spoon"           # ids cleaned for people
+    assert res["summary"] == "Someone had tea; the white mug cooled."
+    assert "investigate" in [s["step"] for s in res["trace"]] and res["quality_issues"] == []
+
+
+def test_agent_search_skips_things_already_known(tmp_path):
+    script = [{"action": "search", "phrase": "mug"},
+              {"action": "finish", **StoryModels.STORY}]
+    res = asyncio.run(run_photo(StoryModels(agent=script), _photo(tmp_path), tmp_path / "out"))
+    assert res["moves"][0]["result"] == "no new 'mug' found" and len(res["objects"]) == 2
+
+
+def test_agent_out_of_moves_falls_back_to_single_reasoning(tmp_path):
+    script = [{"action": "zoom", "object_id": "o1"}] * 6          # never finishes
+    models = StoryModels(agent=script)
+    res = asyncio.run(run_photo(models, _photo(tmp_path), tmp_path / "out"))
+    assert models.tags[-3:] == ["reason", "verify", "summary"] and "agent_4" in models.tags and "agent_5" not in models.tags
+    assert [e["description"] for e in res["events"]] == ["tea was poured", "packet was opened"]
+    assert "single reasoning call" in res["trace"][2]["detail"]
+
+
+def test_agent_crash_falls_back(tmp_path):
+    class Broken(StoryModels):
+        async def spark_json(self, prompt, schema, jpeg=None, tag=""):
+            if tag.startswith("agent_"):
+                self.tags.append(tag)
+                raise ValueError("model returned nonsense twice")
+            return await super().spark_json(prompt, schema, jpeg, tag)
+    res = asyncio.run(run_photo(Broken(), _photo(tmp_path), tmp_path / "out"))
+    assert len(res["events"]) == 2 and "ValueError" in res["trace"][2]["detail"]
+
+
+def test_bad_moves_are_reported_not_fatal(tmp_path):
+    script = [{"action": "zoom", "object_id": "o42"}, {"action": "clock", "trace": "rainbow"},
+              {"action": "finish", **StoryModels.STORY}]
+    res = asyncio.run(run_photo(StoryModels(agent=script), _photo(tmp_path), tmp_path / "out"))
+    assert [m["result"] for m in res["moves"][:2]] == ["could not use zoom with those arguments",
+                                                        "could not use clock with those arguments"]
+    assert len(res["events"]) == 2
+
+
+def test_no_clock_means_no_minimum_time():
+    """Real run (milk photo): the model gave 'at least 30 min' to events that happened ~2 min before.
+    Nothing visible set those minimums, so without a seen trace the range must start at 0."""
+    from app.schemas import Timeline
+    tl = Timeline.model_validate({"summary": "s", "events": [
+        {"id": "a", "description": "powder was scooped", "minutes_before_min": 30, "minutes_before_max": 120,
+         "evidence": [{"object_id": "o1", "observation": "spoon on lid"}], "trace": None},
+        {"id": "b", "description": "tea was poured", "minutes_before_min": 20, "minutes_before_max": 60,
+         "evidence": [{"object_id": "o1", "observation": "skin on the tea"}], "trace": "liquid_film"}]})
+    ev = {e["description"]: e for e in ground_events(tl, {"o1"})}
+    assert (ev["powder was scooped"]["minutes_before_min"], ev["powder was scooped"]["minutes_before_max"]) == (0, 120)
+    assert ev["powder was scooped"]["model_range"] == [30, 120]          # the model's guess is kept for review
+    assert (ev["tea was poured"]["minutes_before_min"], ev["tea was poured"]["minutes_before_max"]) == (20, 60)
+
+
+def test_clock_lookup_for_a_trace_nobody_sees_is_refused(tmp_path):
+    script = [{"action": "clock", "trace": "steam"}, {"action": "clock", "trace": "liquid_film"},
+              {"action": "finish", **StoryModels.STORY}]
+    res = asyncio.run(run_photo(StoryModels(agent=script), _photo(tmp_path), tmp_path / "out"))
+    assert res["moves"][0]["result"] == "steam: not seen on any object, so its clock does not apply here"
+    assert res["moves"][1]["result"].startswith("liquid_film: 10 to 90 min")   # seen on the mug: allowed
+
+
+def test_long_summary_is_cut_to_its_first_sentence():
+    from app.reason import plain_text
+    long2 = "Someone made a milky drink and ate part of a brownie. " + "word " * 60 + "end."
+    out = plain_text(long2, {}, {})
+    assert out == "Someone made a milky drink and ate part of a brownie."
+
+
+def test_residue_is_a_known_trace_without_a_clock():
+    from app.clocks import NO_CLOCK
+    from app.schemas import ObjectState
+    assert "residue" in NO_CLOCK
+    assert ObjectState(object_id="o1", traces=["residue", "sparkles"]).traces == ["residue"]
+
+
+def test_boosted_pair_reveals_faint_haze():
+    """A faint haze (steam) 6 levels brighter than the dark counter behind it becomes clearly visible,
+    even when the crop also holds white tiles and black shadows (a plain contrast stretch does nothing then)."""
+    from app.imaging import boosted_pair
+    a = np.full((60, 80, 3), 40, np.uint8); a[10:30, 30:50] = 46
+    a[:5, :] = 255; a[55:, :] = 0                                    # white tiles, black shadow
+    pair = np.array(boosted_pair(Image.fromarray(a))).astype(int)
+    left, right = pair[:, :80], pair[:, 88:]
+    assert left[20, 40, 0] - left[40, 10, 0] == 6
+    assert right[20, 40, 0] - right[40, 10, 0] > 60
+
+
+def test_clock_only_dates_an_event_when_the_verifier_confirms_the_trace(tmp_path):
+    """Run 2 on the milk photo: bubbles were read as a skin (liquid_film) and its clock moved a drink
+    made 3 minutes earlier to '10 to 90 min'. Now the checker must confirm the trace by itself."""
+    ok = asyncio.run(run_photo(StoryModels(), _photo(tmp_path), tmp_path / "a"))
+    tea = ok["events"][0]
+    assert (tea["minutes_before_min"], tea["minutes_before_max"]) == (10, 90)
+    assert tea["trace_check"]["verdict"] == "yes" and tea["clock_rule"]
+
+    models = StoryModels(trace_verdict="no")
+    res = asyncio.run(run_photo(models, _photo(tmp_path, "b.jpg"), tmp_path / "b"))
+    tea = next(e for e in res["events"] if e["description"] == "tea was poured")
+    assert tea["clock"] == "clock_not_applied" and tea["clock_rule"] is None
+    assert (tea["minutes_before_min"], tea["minutes_before_max"]) == (0, 200)   # back to the model's honest max
+    assert tea["trace_check"]["verdict"] == "no"
+    assert tea["status"] == "verified"                     # the visible facts still hold; only the clock went
+    claims = [l for l in models.prompts["verify"].splitlines() if l.startswith("- c")]
+    assert any("shows a matte, wrinkled skin" in l for l in claims)
+
+
+def test_verifier_sees_sharp_close_ups_of_the_cited_objects(tmp_path):
+    models = StoryModels()
+    asyncio.run(run_photo(models, _photo(tmp_path, size=(2000, 1600)), tmp_path / "out"))
+    ev = Image.open(__import__("io").BytesIO(models.images["verify"]))
+    assert ev.width > 700                                  # two columns of as-photographed | boosted pairs
+    assert (tmp_path / "out" / "evidence.jpg").exists()
