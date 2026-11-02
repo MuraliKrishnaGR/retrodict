@@ -1,4 +1,18 @@
 """Turn errors into a plain-language fix. Never prints the key."""
+import traceback
+
+from app import config
+
+
+def save_details(err: Exception) -> str:
+    """Write the full traceback to .cache/last_error.txt so the exact failing line can be found later."""
+    path = config.CACHE_DIR / "last_error.txt"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(traceback.format_exception(type(err), err, err.__traceback__)), encoding="utf-8")
+        return str(path.relative_to(config.ROOT)) if path.is_relative_to(config.ROOT) else str(path)
+    except OSError:
+        return ""
 
 
 def explain(err: Exception) -> str:
@@ -18,7 +32,7 @@ def explain(err: Exception) -> str:
     if code == 429 or name == "RateLimitError":
         return "Rate limit. Wait a minute and run again (finished steps are cached, not paid twice)."
     if code == 400 or name == "BadRequestError":
-        return "Request format rejected. Send Claude this exact error so the request can be fixed."
+        return "The model host rejected the request format. " + _details(err)
     if name in ("APIConnectionError", "APITimeoutError", "ConnectError", "TimeoutError"):
         return "Network problem. Check your internet and run again."
     if name in ("ModuleNotFoundError", "ImportError"):
@@ -27,4 +41,9 @@ def explain(err: Exception) -> str:
         return "Could not download SAM 3.1 weights. Check your internet; then run the same command again."
     if name == "OutOfMemoryError" or "out of memory" in low or "memoryerror" in low:
         return "Not enough RAM for SAM. Close other apps, or set MAX_IMAGE_SIDE=768 in .env."
-    return "Unexpected error. Send Claude this exact error text."
+    return "Unexpected error. " + _details(err)
+
+
+def _details(err: Exception) -> str:
+    saved = save_details(err)
+    return f"Full details saved to {saved}." if saved else "Run again to see if it repeats."

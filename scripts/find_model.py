@@ -52,7 +52,7 @@ def main():
             return
         except Exception as e:
             print(f"  [NO]   {model_id} -> {type(e).__name__}: {str(e)[:160]}")
-    print("\nNo id worked. Send Claude this whole output.")
+    print("\nNo id worked. Check the model name on your Baseten model page and set LLM_MODEL in .env.")
 
 
 if __name__ == "__main__":
