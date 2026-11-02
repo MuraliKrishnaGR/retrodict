@@ -13,9 +13,14 @@ Built during the Meta Global AI Developer Hackathon (indie track, Push the Front
    (concept matches are de-duplicated, and SAM's confident detections are kept even if uncounted).
 2. **Read**: Muse Spark Open reads each object's current state from its own close-up crop
    and names the physical traces it can see (steam, wet ring, torn wrapper...).
-3. **Reason**: Muse Spark Open reasons backward to a timeline. Every event must cite evidence that is
-   visible now. **Trace clocks** (physical rules such as "visible steam lasts minutes") then fix or narrow
-   each event's time range, so times rest on physics, not on the model's guess.
+3. **Investigate**: an agent built on Muse Spark Open works like a detective with tools. Each turn it
+   chooses one move: **zoom** (a sharp close-up from the full-resolution photo), **search** (SAM 3.1 looks
+   for something not yet found, such as a spoon or crumbs, which then becomes citable evidence), or
+   **clock** (the timing rule of a physical trace). Then it gives a backward timeline in which every event
+   cites evidence visible now and says how a rewind should show the scene before it.
+   **Trace clocks** (physical rules such as "visible steam lasts minutes") fix or narrow each event's time
+   range, so times rest on physics, not on the model's guess. If the agent fails, a single reasoning call
+   takes over.
 4. **Verify**: an independent check sees only the plain claims, not the story, and confirms or rejects
    each piece of evidence. Events left with no support are rejected and shown as such.
 
