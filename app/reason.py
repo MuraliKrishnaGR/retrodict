@@ -16,8 +16,10 @@ Trace clocks for the traces seen in this photo (physical rules; minutes BEFORE t
 {clocks}
 
 Rules:
-- Every event must cite 1 to 3 pieces of evidence: an object id from the list AND a short fact that is
+- Every event must cite 1 to 3 pieces of evidence: an object id from the list AND ONE short fact that is
   visible in the photo NOW (not a guess about the past).
+- Connect the objects: a container with leftovers of the same food or liquid that is now in another
+  container most likely held it before (it was poured or served from it).
 - If an event is dated by one of the traces above, set "trace" to that trace name and keep its time range
   inside the trace clock. Otherwise set "trace" to null, minutes_before_min to 0, and an honest maximum.
 - A MISSING trace proves nothing: no visible steam does not mean a drink is old.
@@ -26,14 +28,16 @@ Rules:
 - Refer to people only as "someone". Do not invent objects. 1 to 6 events, earliest first.
 - "undo": how a rewind of the REAL photo should show the scene before this event. One of: "remove" (the
   object was put there by this event), "add_steam" (the drink was still steaming), "refill" (some was eaten
-  or drunk), "move" (the object was moved), "mark" (cannot be shown honestly with pixels).
+  or drunk), "move" (the object was moved), "mark" (cannot be shown honestly with pixels). "undo_object": the
+  id of the object that change applies to (the brownie that was eaten, not the mug the crumbs lie next to).
 - If the scene shows no sign of recent activity, return few or no events.
 - "summary": 1 or 2 plain sentences (at most 40 words) for a person who has never seen this system. Say what most likely
   happened, or that nothing shows recent activity. Mention only what IS visible: never list traces or
   things that are absent. Do not use object ids or words with underscores; name objects by what they are.
 Return ONLY JSON: {{"summary": "...", "events": [{{"id": "e1", "description": "...",
 "minutes_before_min": 0, "minutes_before_max": 30, "evidence": [{{"object_id": "o1",
-"observation": "..."}}], "trace": null, "confidence": 0.6, "alternatives": [], "undo": "mark"}}]}}"""
+"observation": "..."}}], "trace": null, "confidence": 0.6, "alternatives": [], "undo": "mark",
+"undo_object": "o1"}}]}}"""
 
 
 def states_text(states: dict, labels: dict) -> str:
@@ -43,8 +47,10 @@ def states_text(states: dict, labels: dict) -> str:
 
 
 def ground_events(timeline: Timeline, valid_ids: set) -> list:
-    """Keep only evidence that points at real objects, drop events left with none, apply the clocks,
-    and order earliest first (largest minutes_before first)."""
+    """Keep only evidence that points at real objects, drop events left with none, apply the clocks.
+    The model's own order (earliest first) is kept: it reasons about sequence (milk poured, THEN drunk),
+    which sorting by time ranges would destroy when ranges are wide. Only if that order contradicts the
+    ranges (a later event surely longer ago than an earlier one) are events sorted by range instead."""
     events = []
     for e in timeline.events:
         ev = [x.model_dump() for x in e.evidence if x.object_id in valid_ids and x.observation.strip()]
@@ -59,13 +65,44 @@ def ground_events(timeline: Timeline, valid_ids: set) -> list:
                  clock_rule=(c.rule if c else None),   # the physics behind the range, shown to people
                  model_range=[e.minutes_before_min, e.minutes_before_max])
         events.append(d)
-    events.sort(key=lambda d: (-d["minutes_before_max"], -d["minutes_before_min"]))
+    if not order_is_consistent(events):
+        events.sort(key=lambda d: (-d["minutes_before_max"], -d["minutes_before_min"]))
     for i, d in enumerate(events, 1):
         d["id"] = f"e{i}"
     return events
 
 
 MAX_WORDS = 60   # same cap the quality gate uses
+
+
+def order_is_consistent(events: list) -> bool:
+    """events earliest first: no later event may be certainly longer ago than an earlier one."""
+    return not any(events[j]["minutes_before_min"] > events[i]["minutes_before_max"]
+                   for i in range(len(events)) for j in range(i + 1, len(events)))
+
+
+def _objects(e: dict) -> set:
+    return {ev["object_id"] for ev in e["evidence"]}
+
+
+def propagate_order(events: list) -> list:
+    """Events that share an object happened in the order given (poured INTO the glass, then drunk FROM it),
+    so their time ranges constrain each other: a later step cannot be longer ago than an earlier one.
+    Run AFTER the verifier, so only clocks that survived the trace check are spread. Events on different
+    objects are left alone: their order is a guess, and spreading a guess would invent precision."""
+    for i, a in enumerate(events):
+        for b in events[i + 1:]:
+            if not (_objects(a) & _objects(b)):
+                continue
+            hi = min(b["minutes_before_max"], a["minutes_before_max"])
+            lo = max(a["minutes_before_min"], b["minutes_before_min"])
+            if hi >= b["minutes_before_min"] and hi < b["minutes_before_max"]:
+                b["minutes_before_max"] = hi
+                b["bounded_by"] = f"happened after: {a['description']}"
+            if lo <= a["minutes_before_max"] and lo > a["minutes_before_min"]:
+                a["minutes_before_min"] = lo
+                a["bounded_by"] = f"happened before: {b['description']}"
+    return events
 
 
 def plain_text(text: str, states: dict, labels: dict) -> str:
@@ -104,7 +141,7 @@ def to_json(x) -> str:
 SUMMARY_PROMPT = """Write what most likely happened before a photo was taken, for a person who has never seen
 this system: 1 or 2 plain sentences, at most 40 words. Use ONLY these confirmed events:
 {kept}
-An independent check found NO support for these, so do not mention them at all:
+An independent check contradicted these (fully or in part), so do not mention them at all:
 {rejected}
 Refer to people only as "someone". Return ONLY JSON: {{"summary": "..."}}"""
 

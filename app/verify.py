@@ -10,12 +10,17 @@ moved a 3-minute-old drink to "10 to 90 min"). An unconfirmed trace loses its cl
 from app.clocks import LOOKS
 from app.schemas import VerifyReport
 
-VERIFY_PROMPT = """You are checking facts about a photo, independently. The image shows sharp close-ups of the
-objects named in the claims, each labelled with its id; where there are two side by side, the RIGHT one has
-its contrast boosted to reveal faint steam or wet shine (glare looks brighter there too). For EACH claim,
-look only at the image and answer:
-"yes" if the image clearly shows it, "no" if the image clearly contradicts it, "unclear" if you cannot tell.
+VERIFY_PROMPT = """You are checking facts about a photo, independently. On top, the whole scene with numbered
+objects (use it for positions). Below, sharp close-ups of the objects named in the claims, each labelled with
+its id, in three copies: as photographed, shadows lifted (faint steam, film; glare looks brighter there too),
+and glare dimmed (what reflections hide). For EACH claim, look only at the image and answer:
+"yes" if the image clearly shows it, "no" if the image clearly contradicts it, "unclear" if you cannot tell,
+"partly" if its MAIN fact is shown but a side detail is wrong (say which in the note).
 Be strict: a claim about the past ("was poured", "someone ate") is "unclear" unless the image shows it.
+If a claim joins several facts, judge its MAIN visible fact: "no" only when the image contradicts that main
+fact (e.g. "a bowl full of thick contents" when the bowl is empty but smeared); a wrong side detail (which
+edge a handle points to) is "partly", never "no". Something you cannot MAKE OUT at this size (small drips,
+crumbs, splashes, a faint film) is "unclear": not seeing a small thing is not the same as seeing it absent.
 
 Claims:
 {claims}
@@ -23,6 +28,7 @@ Claims:
 Return ONLY JSON: {{"checks": [{{"claim_id": "c1", "verdict": "yes", "note": "short reason"}}]}}"""
 
 UNCLEAR_PENALTY = 0.75   # each unclear piece of evidence lowers confidence
+CONTRADICTED_PENALTY = 0.5   # each contradicted piece halves it, and the event is marked "contested"
 
 
 def build_claims(events: list, labels: dict) -> list:
@@ -62,14 +68,19 @@ def apply_checks(events: list, claims: list, verdicts: dict) -> tuple:
                     e = _drop_clock(e, verdict, note)
                 continue
             results.append({**e["evidence"][c["index"]], "verdict": verdict, "note": note})
-        confirmed = [r for r in results if r["verdict"] == "yes"]
-        unclear = [r for r in results if r["verdict"] == "unclear"]
+        confirmed = [r for r in results if r["verdict"] in ("yes", "partly")]
+        unclear = [r for r in results if r["verdict"] in ("unclear", "partly")]   # a wrong detail costs like doubt
         e = dict(e, evidence=results)
         if not confirmed and not unclear:
             rejected.append(dict(e, status="rejected", reason="every piece of evidence was contradicted"))
             continue
-        e["confidence"] = round(e["confidence"] * (UNCLEAR_PENALTY ** len(unclear)), 3)
-        e["status"] = "verified" if confirmed and not unclear else ("partly_verified" if confirmed else "unverified")
+        contradicted = [r for r in results if r["verdict"] == "no"]
+        e["confidence"] = round(e["confidence"] * (UNCLEAR_PENALTY ** len(unclear))
+                                * (CONTRADICTED_PENALTY ** len(contradicted)), 3)
+        if contradicted:                # run 5: "flour fills the bowl" was contradicted, yet "someone mixed
+            e["status"] = "contested"   # flour" stayed in the story because another fact held
+        else:
+            e["status"] = "verified" if confirmed and not unclear else ("partly_verified" if confirmed else "unverified")
         kept.append(e)
     return kept, rejected
 

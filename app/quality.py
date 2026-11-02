@@ -37,7 +37,7 @@ def check_result(res: dict) -> list:
         lo, hi = e["minutes_before_min"], e["minutes_before_max"]
         if lo < 0 or hi < lo:
             issues.append(f"event {e['id']}: bad time range {lo} to {hi}")
-        if e.get("status") not in ("verified", "partly_verified", "unverified"):
+        if e.get("status") not in ("verified", "partly_verified", "unverified", "contested"):
             issues.append(f"event {e['id']}: not checked by the verifier")
     for oid, s in res.get("states", {}).items():
         if s.get("confidence", 0) == 0 and s.get("observations") == ["unclear"]:
