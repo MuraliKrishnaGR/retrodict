@@ -19,9 +19,32 @@ from app.agent import Scene, investigate
 from app.perceive import perceive
 from app.quality import check_result
 from app.read_state import read_state
-from app.reason import reason, rewrite_summary
+from app.reason import propagate_order, reason, rewrite_summary
+from app.errors import save_details
 from app.imaging import prepare_image
 from app.verify import verify
+
+
+def mostly_contradicted(e: dict) -> bool:
+    """Left out of the summary when at least as many of its facts were contradicted as confirmed (run 5:
+    'flour': 1 yes, 1 no). One wrong detail among several confirmed facts keeps it in (run 8: 'milk poured
+    from the pan into the mug' had 2 yes and 1 'no' on small drips, and the drink vanished from the story)."""
+    v = [ev.get("verdict") for ev in e["evidence"]]
+    return v.count("no") > 0 and v.count("no") >= v.count("yes") + v.count("partly")
+
+
+LOW_DETAIL_MP = 3.0    # phone cameras take 12+ MP; messaging apps shrink photos to about 1-2 MP
+
+
+def photo_note(photo_path) -> str:
+    """Tell people when the photo itself limits what can be seen (run on the milk photo: a 1.4 MP
+    messaging-app copy, in which the sugar spoon inside the jar is barely visible)."""
+    with Image.open(photo_path) as im:
+        mp = im.width * im.height / 1e6
+    if mp < LOW_DETAIL_MP:
+        return (f"Low-detail photo ({mp:.1f} MP): small clues may be missed. "
+                "The original from the phone's camera keeps much more detail than a copy sent through a chat app.")
+    return ""
 
 
 class Trace:
@@ -40,7 +63,8 @@ async def run_photo(models, photo_path, out_dir) -> dict:
     scene = await perceive(models, photo_path, out_dir)
     trace.step("perceive", f"{len(scene['objects'])} objects masked", t)
 
-    result = {"photo": str(photo_path), "size": scene["size"], "objects": scene["objects"],
+    result = {"photo": str(photo_path), "size": scene["size"], "photo_note": photo_note(photo_path),
+              "objects": scene["objects"],
               "states": {}, "summary": "", "events": [], "rejected": [], "moves": [], "trace": trace.steps}
     if not scene["objects"]:
         result["summary"] = "No objects were found, so there is nothing to reason from."
@@ -53,7 +77,7 @@ async def run_photo(models, photo_path, out_dir) -> dict:
 
     t = time.time()
     scene_ctx = Scene(photo_path, out_dir, img, jpeg, objects, drawn, {})
-    states = await read_state(models, scene_ctx.sheet_jpeg(), objects)
+    states = await read_state(models, objects, scene_ctx.detail_jpeg)
     scene_ctx.states = states
     n_traces = sum(len(s["traces"]) for s in states.values())
     trace.step("read", f"{len(states)} objects read, {n_traces} physical traces seen", t)
@@ -62,6 +86,7 @@ async def run_photo(models, photo_path, out_dir) -> dict:
     try:
         found = await investigate(models, scene_ctx)
     except Exception as e:                          # a broken agent answer must not sink the run
+        save_details(e)                             # ...but keep the exact failing line for fixing it
         found = {"finished": False, "moves": [], "error": f"{type(e).__name__}: {str(e)[:200]}"}
     result["moves"] = found["moves"]
     if found["finished"]:
@@ -80,11 +105,14 @@ async def run_photo(models, photo_path, out_dir) -> dict:
     image = scene_ctx.evidence_jpeg(cited) if cited else scene_ctx.sheet_jpeg()
     checked = await verify(models, image, timeline["events"], scene_ctx.labels)
     trace.step("verify", f"{checked['claims']} claims checked, {len(checked['rejected'])} events rejected", t)
+    propagate_order(checked["events"])              # surviving clocks tighten the steps that follow them
     for i, e in enumerate(checked["events"], 1):     # no gaps after rejections: e1, e2, e3...
         e["id"] = f"e{i}"
     result["events"], result["rejected"] = checked["events"], checked["rejected"]
-    if checked["rejected"]:
-        result["summary"] = await rewrite_summary(models, checked["events"], checked["rejected"],
+    doubtful = [e for e in checked["events"] if mostly_contradicted(e)]
+    if checked["rejected"] or doubtful:             # the story told to people uses only what held up
+        sure = [e for e in checked["events"] if not mostly_contradicted(e)]
+        result["summary"] = await rewrite_summary(models, sure, checked["rejected"] + doubtful,
                                                   states, scene_ctx.labels)
     return _save(out_dir, result)
 
