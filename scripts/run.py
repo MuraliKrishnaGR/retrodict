@@ -16,11 +16,16 @@ from app.errors import explain          # noqa: E402
 from app.pipeline import run_photo      # noqa: E402
 
 
+# The verifier checks the visible facts each event cites, not the story itself, so say exactly that.
+STATUS_TEXT = {"verified": "evidence confirmed", "partly_verified": "evidence partly confirmed",
+               "unverified": "evidence not confirmed"}
+
+
 def when(e) -> str:
     lo, hi = e["minutes_before_min"], e["minutes_before_max"]
     def fmt(m):
         return f"{m:g} min" if m < 120 else f"{m / 60:.1f} h"
-    return f"{fmt(lo)} to {fmt(hi)} before"
+    return f"up to {fmt(hi)} before" if lo == 0 else f"{fmt(lo)} to {fmt(hi)} before"
 
 
 async def main():
@@ -44,7 +49,14 @@ async def main():
 
     print("\nSteps:")
     for s in res["trace"]:
-        print(f"  {s['step']:<9} {s['seconds']:>6}s  {s['detail']}")
+        print(f"  {s['step']:<11} {s['seconds']:>6}s  {s['detail']}")
+    if res.get("moves"):
+        print("\nInvestigation (agent moves):")
+        for i, m in enumerate(res["moves"], 1):
+            arg = m.get("object_id") or m.get("phrase") or m.get("trace") or ""
+            print(f"  {i}. {m['move']} {arg}".rstrip() + f"  -> {m['result']}")
+            if m.get("thought"):
+                print(f"       why: {m['thought']}")
     print("\nObjects:")
     for oid, s in res["states"].items():
         traces = f"  [traces: {', '.join(s['traces'])}]" if s["traces"] else ""
@@ -55,10 +67,18 @@ async def main():
         print("  (no events)")
     for e in res["events"]:
         clock = f", {e['clock'].replace('_', ' ')} ({e['trace']})" if e["clock"] != "no_clock" else ""
-        print(f"  {e['id']}  {when(e)}  [{e['status']}, confidence {e['confidence']:.2f}{clock}]")
+        status = STATUS_TEXT.get(e["status"], e["status"])
+        print(f"  {e['id']}  {when(e)}  [{status}, confidence {e['confidence']:.2f}{clock}]")
         print(f"      {e['description']}")
+        if e.get("clock_rule"):
+            print(f"      why this time: {e['clock_rule']}")
+        tc = e.get("trace_check")
+        if tc:
+            note = f" ({tc['note']})" if tc.get("note") else ""
+            print(f"      trace check: {str(tc['trace']).replace('_', ' ')} -> {tc['verdict']}{note}")
         for ev in e["evidence"]:
             print(f"      - {ev['object_id']}: {ev['observation']}  -> {ev['verdict']}")
+        print(f"      rewind: {e.get('undo', 'mark')}")
         for alt in e.get("alternatives", []):
             print(f"      or: {alt}")
     for e in res["rejected"]:
