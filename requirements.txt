@@ -12,3 +12,7 @@ transformers==5.22.1
 opencv-python-headless>=4.10
 imageio>=2.34
 imageio-ffmpeg>=0.5
+# Web page
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9

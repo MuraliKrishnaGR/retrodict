@@ -5,7 +5,7 @@ No image generator is involved: every frame is the photo itself, edited only in 
   add_steam  -> soft rising steam is drawn above the drink, and labelled as an illustration
   refill     -> the object is highlighted with "some was eaten or drunk"; the missing part is NOT drawn
   move, mark -> the object is highlighted and the event is captioned; nothing is drawn
-The clip says on screen that it is a plausible reconstruction, not evidence.
+The clip says on screen that it is a best guess from the photo, not proof.
 
 Output in the run folder: rewind.mp4 (H.264, plays in browsers) and rewind_0.jpg ... rewind_N.jpg,
 one still per state (0 = the photo, N = the earliest scene), which the web page uses for its slider."""
@@ -16,8 +16,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from app.eraser import erase, removal_mask
+
 FPS = 24
-INTRO, PER_EVENT, OUTRO = 0.9, 1.0, 1.2      # seconds
+INTRO, PER_EVENT, OUTRO = 1.2, 1.6, 1.5      # seconds: long enough to read each caption (5 events ~ 10 s)
 BAR_H = 64                                    # caption band at the bottom
 GHOST = 0.72        # a removed object keeps 28% of itself: honest ("not here yet") and hides inpaint smear
 ACCENT = (255, 196, 0)
@@ -56,6 +58,13 @@ ARRIVED = re.compile(r"\b(put|puts|placed|place|poured|pour|set|left|leaves|brou
                      r"made|prepared|filled|moved|carried|took out)\b")
 
 
+POURED_INTO = re.compile(r"\b(poured|pour|pouring|filled|fill|made|prepared|served|added)\b.*\b(into|in)\b")
+CONTAINER = re.compile(r"\b(mug|glass|cup|tumbler|bowl|plate|beaker)\b")
+LEFT_BEHIND = re.compile(r"\b(leaving|dropping|dropped|spilling|spilled|scattering|scattered)\b((?:\W+\w+){1,4})")
+LEFTOVER_MAX = 0.02            # only small things (crumbs, drips) count as left behind: never the jar a spoon
+                               # was "left resting on" (run 9)
+
+
 def undo_kind(e: dict) -> str:
     """The rewind must show the OPPOSITE of the event. A model's undo can contradict its own description
     (run 4: 'someone ate part of the brownie' with undo 'remove', which made the brownie vanish, but the
@@ -65,16 +74,40 @@ def undo_kind(e: dict) -> str:
         return "refill"                          # it was there before, only fuller
     if kind == "remove" and not ARRIVED.search(text):
         return "mark"                            # nothing says the object arrived in this event
+    if kind in ("refill", "mark", "remove") and POURED_INTO.search(text) and CONTAINER.search(text):
+        return "empty"                           # the drink was poured INTO the cup: before it, the cup was empty
     return kind
 
 
-def inpaint(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """Fill the masked object from its surroundings, so it can fade out of the scene."""
+def contents_mask(img: np.ndarray, container: np.ndarray) -> np.ndarray:
+    """What is inside a cup or glass seen from above: the surface around the middle of the opening (about
+    a sixth of the way down the cup), grown over pixels of the same colour. Not the bright rim or the
+    shiny inner wall (run 9: 'far from the cup's colour' also took the steel rim and the handle)."""
     import cv2
-    grown = cv2.dilate(mask.astype(np.uint8) * 255, np.ones((9, 9), np.uint8))
-    bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    filled = cv2.inpaint(bgr, grown, 9, cv2.INPAINT_TELEA)
-    return cv2.cvtColor(filled, cv2.COLOR_BGR2RGB)
+    ys, xs = np.nonzero(container)
+    if not len(ys):
+        return np.zeros_like(container)
+    top, h = ys.min(), ys.max() - ys.min()
+    row = top + int(h * 0.16)
+    cols = np.nonzero(container[row])[0]
+    if not len(cols):
+        return np.zeros_like(container)
+    cy, cx = row, int(cols.mean())
+    r = max(2, h // 40)
+    seed = np.median(img[cy - r:cy + r + 1, cx - r:cx + r + 1].reshape(-1, 3).astype(np.float32), axis=0)
+    opening = container.copy()
+    opening[top + int(h * 0.40):] = False
+    near = opening & (np.abs(img.astype(np.float32) - seed).max(-1) < 38)
+    near = cv2.morphologyEx(near.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    n, lab = cv2.connectedComponents(near)
+    if n <= 1 or lab[cy, cx] == 0:
+        return np.zeros_like(container)
+    out = lab == lab[cy, cx]
+    out = cv2.morphologyEx(out.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+    contours, _ = cv2.findContours(out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    filled = np.zeros_like(out)
+    cv2.drawContours(filled, contours, -1, 1, thickness=-1)       # a bright highlight on the drink is drink too
+    return cv2.dilate(filled, np.ones((3, 3), np.uint8)).astype(bool) & container
 
 
 def outline(mask: np.ndarray, width: int = 3) -> np.ndarray:
@@ -156,8 +189,26 @@ class Rewinder:
             kind = undo_kind(e)
             if kind == "add_steam" and not self.masks[oid].any():
                 kind = "mark"
-            steps.append({"event": e, "oid": oid, "kind": kind})
+            erase_ids = [oid] if kind in ("remove", "move") else []
+            erase_ids += self._left_behind(e, oid)          # crumbs "left" by eating came with this event
+            steps.append({"event": e, "oid": oid, "kind": kind, "erase": erase_ids})
         return steps
+
+    def _left_behind(self, e: dict, oid: str) -> list:
+        """Cited objects the event says it left behind ('...leaving brown crumbs near the mug')."""
+        m = LEFT_BEHIND.search(e.get("description", "").lower())
+        if not m:
+            return []
+        after = set(re.findall(r"[a-z]{3,}", m.group(2)))
+        out = []
+        for ev in e["evidence"]:
+            cid = ev["object_id"]
+            if cid == oid or cid not in self.masks or cid in out:
+                continue
+            small = self.masks[cid].sum() < LEFTOVER_MAX * self.masks[cid].size
+            if small and set(re.findall(r"[a-z]{3,}", self.labels.get(cid, ""))) & after:
+                out.append(cid)
+        return out
 
     def _object_for(self, e: dict):
         """The object the rewind changes: the model's undo_object if real; otherwise the cited object whose
@@ -189,19 +240,44 @@ class Rewinder:
         """Undo one event on `base` with strength a (0..1)."""
         m = self.masks[step["oid"]]
         img = base.astype(np.float32)
-        if step["kind"] == "remove":
+        if step["erase"] or step["kind"] == "empty":
             if "fill" not in step:
-                step["fill"] = inpaint(base, m).astype(np.float32)
-            grown = np.array(Image.fromarray(m.astype(np.uint8) * 255).filter(ImageFilter.MaxFilter(9))) > 127
-            soft = np.array(Image.fromarray(grown.astype(np.uint8) * 255).filter(ImageFilter.GaussianBlur(3)))
-            k = (soft.astype(np.float32) / 255.0)[..., None] * a * GHOST   # a faint ghost stays
-            img = img * (1 - k) + step["fill"] * k
-            edge = outline(m, 2)
-            img[edge] = img[edge] * (1 - 0.45 * a) + np.array([255, 255, 255]) * 0.45 * a   # faint ghost line
+                self._prepare_fill(base, step)
+            if step["hole"].any():
+                ghost = 1.0 if step["eraser"] == "lama" else GHOST     # a realistic fill needs no ghost
+                soft = np.array(Image.fromarray(step["hole"].astype(np.uint8) * 255).filter(ImageFilter.GaussianBlur(3)))
+                k = (soft.astype(np.float32) / 255.0)[..., None] * a * ghost
+                img = img * (1 - k) + step["fill"] * k
+            if step["kind"] in ("remove", "move"):
+                edge = outline(m, 2)
+                img[edge] = img[edge] * (1 - 0.45 * a) + np.array([255, 255, 255]) * 0.45 * a   # faint ghost line
         elif step["kind"] == "add_steam":
             alpha = steam_layer(m, t)[..., None] * a
             img = img * (1 - alpha) + 245 * alpha
         return np.clip(img, 0, 255).astype(np.uint8)
+
+    def _prepare_fill(self, base: np.ndarray, step: dict):
+        """Erase, in one pass, everything this event brought: the object itself (remove, move), the drink
+        poured into a cup (empty) and what it left behind (crumbs). Other objects are protected."""
+        hole = np.zeros_like(self.masks[step["oid"]])
+        for oid in step["erase"]:
+            hole |= self.masks[oid]
+        if step["kind"] == "empty":
+            hole |= contents_mask(base, self.masks[step["oid"]])
+        keep = np.zeros_like(hole)
+        for oid, om in self.masks.items():
+            if oid not in step["erase"] and not (step["kind"] == "empty" and oid == step["oid"]):
+                keep |= om
+        if step["kind"] == "empty":                  # the cup's inside may be refilled, but never its rim
+            cup = self.masks[step["oid"]]
+            inner = np.array(Image.fromarray(cup.astype(np.uint8) * 255).filter(ImageFilter.MinFilter(13))) > 127
+            keep = (keep & ~cup) | (cup & ~inner)
+        if not hole.any():
+            step.update(fill=base.astype(np.float32), hole=hole, eraser="none")
+            return
+        filled, step["eraser"] = erase(base, hole, keep, grow_down=step["kind"] != "empty")
+        step["fill"] = filled.astype(np.float32)
+        step["hole"] = removal_mask(hole, grow_down=step["kind"] != "empty") & ~keep
 
     def _decorate(self, img: np.ndarray, step, k: int, pulse: float, back: float) -> Image.Image:
         """Time cue, highlight, caption band and the honesty line."""
@@ -223,21 +299,27 @@ class Rewinder:
             when, cap = when_text(e), short(e["description"])
             note = {"add_steam": "steam drawn as an illustration",
                     "refill": "some was used, eaten or drunk (not drawn)",
-                    "move": "moved here (old place unknown)",
-                    "mark": "this changed (not drawn)"}.get(step["kind"])
+                    "move": "was somewhere else before (erased here)",
+                    "empty": "not poured yet (drink erased)",
+                    "mark": "this changed (not drawn)",
+                    "remove": "not here yet (erased)"}.get(step["kind"])
             if note:
                 m = self.masks[step["oid"]]
                 ys, xs = np.nonzero(m)
                 y = int(ys.min()) - 26
-                y = y if y >= 44 else int(ys.min()) + 10            # keep clear of the top badges
-                _label(d, (max(6, int(xs.min())), y), note, self.f_small, fill=ACCENT)
+                y = y if y >= 44 else max(44, int(ys.min()) + 10)   # keep clear of the top badges and scrubber
+                tw = d.textlength(note, font=self.f_small)
+                x = int(min(max(6, int(xs.min())), self.w - tw - 14))   # never off the right edge
+                _label(d, (x, y), note, self.f_small, fill=ACCENT)
         d.text((14, self.h - BAR_H + 8), when.upper(), font=self.f_small, fill=ACCENT)
         lines = _wrap(d, cap, self.f_big if len(cap) < 70 else self.f_small, self.w - 28)
         fc = self.f_big if len(cap) < 70 else self.f_small
         for i, line in enumerate(lines):
             d.text((14, self.h - BAR_H + 28 + i * (fc.size + 2) - (6 if len(lines) > 1 else 0)), line, font=fc,
                    fill=(255, 255, 255))
-        _label(d, (10, 10), "◀◀ REWIND  ·  plausible reconstruction, not evidence", self.f_small)
+        _label(d, (38, 10), "REWIND  -  best guess from the photo, not proof", self.f_small)
+        for x0 in (8, 17):                       # a drawn rewind sign: fonts on some computers lack the glyph
+            d.polygon([(x0 + 9, 12), (x0 + 9, 26), (x0, 19)], fill=ACCENT)
         n = max(1, len(self.steps))
         x0, x1, y = self.w - 220, self.w - 14, 22                   # scrubber: now on the right
         d.line([x0, y, x1, y], fill=(255, 255, 255, 160), width=2)

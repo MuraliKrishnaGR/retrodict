@@ -55,7 +55,7 @@ def test_video_and_stills_are_written(tmp_path):
     assert (d / "rewind.mp4").stat().st_size > 1000
     assert info["stills"] == ["rewind_0.jpg", "rewind_1.jpg", "rewind_2.jpg"]
     assert [s["kind"] for s in info["steps"]] == ["refill", "remove"]   # latest event is undone first
-    assert 3.5 < info["seconds"] < 4.5                                   # intro + 2 events + outro
+    assert 5.4 < info["seconds"] < 6.4                                   # intro + 2 events + outro
 
 
 def test_events_without_a_mask_are_skipped(tmp_path):
@@ -95,6 +95,61 @@ def test_undo_is_the_opposite_of_what_the_event_says():
     from app.rewind import undo_kind
     assert undo_kind({"description": "Someone ate part of the brownie", "undo": "remove"}) == "refill"
     assert undo_kind({"description": "Some milk was drunk from the glass", "undo": "remove"}) == "refill"
-    assert undo_kind({"description": "Milk was poured into the glass", "undo": "remove"}) == "remove"
+    assert undo_kind({"description": "Milk was poured into the glass", "undo": "remove"}) == "empty"
+    assert undo_kind({"description": "The frothy milk was poured into the mug", "undo": "refill"}) == "empty"
+    assert undo_kind({"description": "The glass was put on the counter", "undo": "remove"}) == "remove"
     assert undo_kind({"description": "The packet was torn open", "undo": "remove"}) == "mark"
     assert undo_kind({"description": "The drink was still steaming", "undo": "add_steam"}) == "add_steam"
+
+
+def test_eraser_runs_the_model_on_a_crop_and_never_erases_a_neighbour(monkeypatch):
+    """The LaMa path: the model sees a crop padded to multiples of 8, the hole includes the object's
+    reflection below it, and a neighbouring object inside that reach is protected."""
+    torch = __import__("pytest").importorskip("torch")
+    from app import eraser
+    seen = {}
+
+    def fake_model(image, mask):
+        seen["shape"] = tuple(image.shape)
+        return torch.full_like(image, 0.5)                    # "fills" everything with grey
+
+    monkeypatch.setattr(eraser, "load", lambda: fake_model)
+    img = np.full((120, 200, 3), 30, np.uint8)
+    obj = np.zeros((120, 200), bool); obj[30:70, 80:110] = True        # a glass
+    nb = np.zeros((120, 200), bool); nb[75:90, 90:120] = True          # a packet just below it
+    out, method = eraser.erase(img, obj, keep=nb)
+    assert method == "lama" and seen["shape"][2] % 8 == 0 and seen["shape"][3] % 8 == 0
+    assert out[50, 95, 0] > 100                                         # the glass is gone
+    assert out[85, 100, 0] == 30                                        # the packet below is untouched
+    assert out[95, 95, 0] > 100                                         # its reflection further down went too
+    assert out[10, 10, 0] == 30                                         # far away: untouched
+
+
+def test_poured_drink_is_erased_from_the_cup_and_left_behind_crumbs_go_too(tmp_path):
+    """Run 9: 'frothy milk was poured into the mug' -> before it, the mug was empty (contents erased, the mug
+    stays); 'opened the brownie ... leaving brown crumbs' -> the crumbs were not there yet."""
+    d = tmp_path / "run"
+    (d / "masks").mkdir(parents=True)
+    img = np.full((120, 200, 3), 30, np.uint8)
+    img[40:100, 40:90] = (90, 90, 95)                                 # steel mug body
+    img[47:60, 48:82] = (235, 225, 210)                               # milk seen from above, inside the rim
+    img[105:110, 120:126] = (110, 70, 40)                             # crumbs
+    Image.fromarray(img).save(d / "input.jpg", quality=95)
+    masks = {"o4": (40, 100, 40, 90), "o6": (104, 111, 119, 127), "o5": (60, 90, 140, 190)}
+    objects = []
+    for oid, (t, b, l, r) in masks.items():
+        m = np.zeros((120, 200), np.uint8); m[t:b, l:r] = 255
+        Image.fromarray(m).save(d / "masks" / f"{oid}.png")
+        objects.append({"id": oid, "label": {"o4": "mug", "o6": "brown crumbs", "o5": "packet"}[oid],
+                        "bbox": [l, t, r, b], "mask_png": f"masks/{oid}.png"})
+    events = [_ev("e1", "o4", "refill", desc="The frothy milk was poured into the mug"),
+              dict(_ev("e2", "o5", "mark", desc="The brownie packet was opened, leaving brown crumbs near the mug"),
+                   evidence=[{"object_id": "o5", "observation": "torn"}, {"object_id": "o6", "observation": "crumbs"}])]
+    (d / "result.json").write_text(json.dumps({"objects": objects, "events": events, "summary": "s"}))
+    rw = Rewinder(d)
+    assert [(s["kind"], s["erase"]) for s in rw.steps] == [("mark", ["o6"]), ("empty", [])]
+    states = rw.states()
+    before_crumbs, before_milk = states[1].astype(int), states[2].astype(int)
+    assert abs(before_crumbs[107, 123] - 30).max() < 40                # crumbs gone: counter colour again
+    assert before_milk[48, 65].mean() < 200                            # milk gone from the mug's opening
+    assert abs(before_milk[85, 65] - img[85, 65].astype(int)).max() < 15   # the mug body itself stays
