@@ -32,13 +32,17 @@ def _ev(eid, oid, undo, lo=0, hi=30, desc=None):
 
 def test_states_remove_fades_object_and_mark_changes_nothing(tmp_path):
     d = _run_dir(tmp_path, [_ev("e1", "o1", "remove"), _ev("e2", "o2", "mark")])
-    states = Rewinder(d).states()
+    rw = Rewinder(d)
+    states = rw.states()
     assert len(states) == 3                                              # now, -e2, -e2-e1
     photo = states[0].astype(int)
     assert np.abs(states[1].astype(int) - photo).max() == 0             # 'mark' draws nothing on the scene
     mug_now, mug_before = photo[65:95, 45:75].mean(), states[2][65:95, 45:75].astype(int).mean()
     assert mug_before < mug_now - 80                                     # the mug faded towards the dark counter
-    assert mug_before > 35                                               # ...but a faint ghost stays
+    if rw.steps[1]["eraser"] == "opencv":
+        assert mug_before > 35                                           # rough fill: a faint ghost stays
+    else:
+        assert abs(mug_before - 30) < 6                                  # clean texture fill: the counter again
 
 
 def test_steam_is_drawn_above_the_drink_only(tmp_path):
@@ -127,7 +131,7 @@ def test_eraser_fills_the_object_and_its_reflection_and_never_a_neighbour():
     obj = np.zeros((120, 200), bool); obj[30:70, 80:110] = True
     nb = np.zeros((120, 200), bool); nb[75:90, 90:120] = True
     out, method = eraser.erase(img, obj, keep=nb)
-    assert method == "opencv"
+    assert method in ("patchmatch", "opencv")                          # classic algorithms only
     assert out[50, 95].mean() < 120                                     # the glass is gone
     assert tuple(out[85, 100]) == (200, 40, 40)                         # the packet below is untouched
     assert tuple(out[10, 10]) == (30, 30, 30)                           # far away: untouched
@@ -171,3 +175,31 @@ def test_no_non_meta_model_code_in_the_app():
                     list((root / "scripts").glob("*.py")))
     for name in ("big-lama", "qwen", "gradio_client", "stable-diffusion", "diffusers"):
         assert name not in code, name
+
+
+def test_patchmatch_copies_the_background_never_a_neighbour():
+    """A striped desk continues its stripes through the hole; the red packet next to it is never a source."""
+    pm = __import__("pytest").importorskip("patchmatch")
+    if not pm.patchmatch_available:
+        __import__("pytest").skip("PatchMatch library not built here")
+    from app import eraser
+    img = np.zeros((120, 200, 3), np.uint8)
+    img[:, :] = (60, 60, 60)
+    img[::8] = (160, 160, 160)                                          # desk with light stripes
+    img[40:70, 80:110] = (230, 230, 230)                                # a bright cup
+    img[40:70, 115:140] = (220, 30, 30)                                 # a red packet beside it
+    cup = np.zeros((120, 200), bool); cup[40:70, 80:110] = True
+    red = np.zeros((120, 200), bool); red[40:70, 115:140] = True
+    out, method = eraser.erase(img, cup, keep=red, grow_down=False)
+    assert method == "patchmatch"
+    patch = out[45:65, 85:105].astype(int)
+    assert patch.max() < 200 and (patch[..., 0] - patch[..., 1]).max() < 40   # no cup left, no red copied in
+    assert tuple(out[50, 120]) == (220, 30, 30)                         # the packet itself is untouched
+
+
+def test_inside_of_a_cup_uses_the_smooth_fill():
+    from app import eraser
+    img = np.full((60, 60, 3), 90, np.uint8); img[20:40, 20:40] = 240
+    m = np.zeros((60, 60), bool); m[20:40, 20:40] = True
+    _, method = eraser.erase(img, m, grow_down=False, smooth=True)
+    assert method == "opencv"

@@ -26,6 +26,8 @@ Rules:
 - If several objects share a name, list the name ONCE and give their 'count'.
 - 'desc' tells them apart in a few words (colour, material, lid, contents).
 - 'why' is one short sentence on what their state might reveal.
+- Include LEFTOVERS, which are often the best clues: peels, skins, cores, scraps, crumbs, wrappers,
+  caps and lids lying apart, used tea bags, spills (good names: "peel", "crumbs", "cap", "wrapper").
 - At most {n} entries. Do not list walls, floor, tiles, ceiling or people.
 Return ONLY JSON: {{"objects": [{{"name": "...", "count": 1, "desc": "...", "why": "..."}}]}}"""
 

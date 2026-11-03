@@ -17,7 +17,8 @@ from app.perceive import IOU_DUPLICATE, mask_iou
 from app.reason import ground_events, plain_text, states_text
 from app.schemas import UNDO_KINDS, AgentStep, Timeline
 
-MAX_MOVES = 4             # tool moves before it must finish (cost and time cap)
+MAX_MOVES = 7             # tool moves before it must finish (cost and time cap)
+MIN_SEARCHES = 2          # with claims to check, it must look for their evidence before it may finish
 MAX_NEW_PER_SEARCH = 3
 ZOOM_ABOVE = 0.8          # a zoom also shows the space above the object, where steam rises
 SEARCH_MIN_SCORE = 0.5
@@ -31,7 +32,7 @@ What is known so far, per object (visible NOW):
 Trace clocks for traces seen so far (minutes BEFORE the photo):
 {clocks}
 
-Your investigation so far:
+{claims}Your investigation so far:
 {history}
 
 Tools (one per turn). Use a tool only if it could change your answer:
@@ -53,13 +54,16 @@ Time rules:
   mean a drink is old (steam is often invisible in photos). Without a seen trace, minutes_before_min is 0.
 
 When you finish:
+- Keep EVERY claim from the first reading that the photo supports, with its specific names ("the banana
+  was peeled and sliced", not "fruit was cut"), each citing the object you found for it. Drop claims you
+  could not support. One event per action (peeling the banana and cutting the apple are two events).
 - "summary": 1 or 2 plain sentences, at most 40 words, saying what most likely happened (not a list of
   objects); no object ids, no underscores.
 - Reason like a detective about unclear shapes: something white stuck in the sugar of a sugar jar is most
   likely a scoop or spoon left in it. Say "most likely", lower the confidence, and use it.
 - Connect the objects: a container with leftovers of the same food or liquid that is now in another
   container most likely held it before (it was poured or served from it). Name that link as an event.
-- "events": 0 to 6 events, earliest first. Each cites 1 to 3 pieces of evidence: an object id AND ONE short
+- "events": 0 to 10 events, earliest first. Each cites 1 to 3 pieces of evidence: an object id AND ONE short
   fact visible NOW (one fact per piece, so each can be checked on its own). Time is a RANGE (minutes_before_min to minutes_before_max). If a trace dates it, set "trace"
   and stay inside its clock; otherwise "trace" is null and the range is honest and wide.
 - "undo": how a rewind of the REAL photo should show the scene before this event. One of:
@@ -193,9 +197,29 @@ class Scene:
         return new_ids
 
 
-async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress=None) -> dict:
-    """Runs the tool loop. Returns {'summary','events','moves','finished'}; events are grounded and clocked."""
+CLAIMS_NOTE = """A first reading of the whole photo made these CLAIMS. They are leads to check, not facts:
+{lines}
+Check them: for each, make sure the object it rests on is a numbered object. If it is not (a peel, a cap,
+scraps), "search" for it by how it looks ("yellow banana peel", "green orange peel", "black bottle cap");
+zoom when a detail decides it. Also search for leftovers the reading may have missed.
+
+"""
+
+
+def claims_text(proposals: list) -> str:
+    if not proposals:
+        return ""
+    lines = "\n".join(f"  C{i}. {p}" for i, p in enumerate(proposals, 1))
+    return CLAIMS_NOTE.format(lines=lines)
+
+
+async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress=None, proposals=None) -> dict:
+    """Runs the tool loop. Returns {'summary','events','moves','finished'}; events are grounded and clocked.
+    `proposals`: claims from a first reading of the whole photo, which the agent must check with its tools
+    (propose, then prove)."""
     history, moves, checked = [], [], set()
+    proposals = proposals or []
+    searches = 0
     image, image_note = scene.sheet_jpeg(), "the scene with numbered objects on top and close-ups below."
     all_traces = ", ".join(sorted(list(CLOCKS) + list(NO_CLOCK)))
 
@@ -205,12 +229,21 @@ async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress
         prompt = AGENT_PROMPT.format(
             image_note=image_note, states=states_text(scene.states, scene.labels),
             clocks=clock_table_text(seen), history="\n".join(history) or "(nothing yet)",
-            all_traces=all_traces, moves_left=left,
+            all_traces=all_traces, moves_left=left, claims=claims_text(proposals),
             must_finish="" if left else " You MUST finish now.")
         step = await models.spark_json(prompt, AgentStep, jpeg=image, tag=f"agent_{turn}")
         if left == 0 and step.action != "finish":
             break                                       # out of moves without an answer: caller falls back
         action = step.action
+        if action == "finish" and left and proposals and searches < MIN_SEARCHES:
+            # code rule, not a request: claims must be checked against the photo before the answer
+            moves.append({"move": "check", "thought": step.thought,
+                          "result": "not yet: search for the objects the claims rest on first"})
+            history.append(f"{turn + 1}. finish refused -> search for the evidence of the claims first "
+                           f"({MIN_SEARCHES - searches} more search(es))")
+            if progress:
+                progress("move", moves[-1])
+            continue
         image, image_note = scene.sheet_jpeg(), "the scene with numbered objects on top and close-ups below."
 
         if action == "zoom" and step.object_id in scene.labels:
@@ -232,6 +265,7 @@ async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress
             else:
                 items = await models.sam_segment(scene.jpeg, scene.img.width, scene.img.height, phrase)
             new_ids = scene.add_found(phrase, items)
+            searches += 1
             result = (f"found {', '.join(f'{i} ({phrase})' for i in new_ids)}{where}" if new_ids
                       else f"no new '{phrase}' found{where}")
         elif action == "clock" and (clock_for(step.trace) or step.trace in NO_CLOCK) and step.trace not in seen:

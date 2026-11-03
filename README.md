@@ -42,7 +42,9 @@ Every AI model Retrodict uses is a Meta model:
 - **V-JEPA 2** (`facebook/vjepa2-vitl-fpc16-256-ssv2`): watches the real video for the evaluation only
   (local, CPU). Retrodict itself never sees the video.
 
-The rewind erases with OpenCV's inpainting, a classic algorithm, not an AI model. No other AI model is
+The rewind erases with classic algorithms, not AI models: PatchMatch (the "content-aware fill" algorithm,
+PyPatchMatch, MIT) continues the desk or wall through the hole without ever copying another object, and
+OpenCV's smooth fill empties the inside of a cup. No other AI model is
 used anywhere: the hackathon requires every model called at runtime to be a Meta model.
 
 ## Honest timing

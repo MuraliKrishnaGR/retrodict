@@ -82,6 +82,29 @@ LEFTOVER_MAX = 0.02            # only small things (crumbs, drips) count as left
                                # was "left resting on" (run 9)
 
 
+def ease(a: float) -> float:
+    a = min(1.0, max(0.0, a))
+    return a * a * (3 - 2 * a)
+
+
+def rewind_glitch(img: np.ndarray, strength: float, t: float) -> np.ndarray:
+    """Tape-rewind look while a step is undone: a few bands slide sideways and a bright tracking line
+    rolls up the picture. Strength 0..1."""
+    if strength <= 0.01:
+        return img
+    out = img.copy()
+    h, w = out.shape[:2]
+    rng = np.random.default_rng(int(t * 24))
+    for _ in range(3):
+        y = int(rng.integers(0, h - 12))
+        band = int(rng.integers(4, 12))
+        out[y:y + band] = np.roll(out[y:y + band], int(rng.integers(-18, 18) * strength), axis=1)
+    y = int((1 - (t * 1.7) % 1) * h)
+    line = slice(max(0, y - 2), min(h, y + 2))
+    out[line] = np.clip(out[line].astype(np.float32) * (1 - 0.5 * strength) + 255 * 0.5 * strength, 0, 255).astype(np.uint8)
+    return out
+
+
 def undo_kind(e: dict) -> str:
     """The rewind must show the OPPOSITE of the event. A model's undo can contradict its own description
     (run 4: 'someone ate part of the brownie' with undo 'remove', which made the brownie vanish, but the
@@ -272,17 +295,57 @@ class Rewinder:
             if "fill" not in step:
                 self._prepare_fill(base, step)
             if step["hole"].any():
-                ghost = 1.0 if step["kind"] == "empty" else GHOST        # a removed object keeps a faint ghost
+                # a clean texture fill needs no ghost; over a rough smooth fill a faint ghost stays (honest)
+                ghost = 1.0 if step["kind"] == "empty" or step["eraser"] == "patchmatch" else GHOST
                 soft = np.array(Image.fromarray(step["hole"].astype(np.uint8) * 255).filter(ImageFilter.GaussianBlur(3)))
-                k = (soft.astype(np.float32) / 255.0)[..., None] * a * ghost
+                soft = soft.astype(np.float32) / 255.0
+                if step["kind"] == "empty" and 0 < a < 1:
+                    # the drink drains: its surface sinks from the top of the cup's opening to the bottom
+                    ys = np.nonzero(step["hole"])[0]
+                    level = ys.min() + (ys.max() - ys.min() + 1) * ease(a)
+                    rows = np.arange(soft.shape[0], dtype=np.float32)[:, None]
+                    soft = soft * np.clip((level - rows) / 4 + 0.5, 0, 1)
+                    k = soft[..., None] * ghost
+                else:
+                    flying = step["kind"] in ("remove", "move") and 0 < a < 1
+                    k = soft[..., None] * (min(1.0, a * 4) if flying else a) * ghost
                 img = img * (1 - k) + step["fill"] * k
-            if step["kind"] in ("remove", "move"):
+            if step["kind"] in ("remove", "move") and 0 < a < 1 and step["oid"] in step["erase"]:
+                img = self._fly(img, base, m, a)            # the real object, cut out by SAM, carried away
+            if step["kind"] in ("remove", "move") and step["eraser"] != "patchmatch":
                 edge = outline(m, 2)
                 img[edge] = img[edge] * (1 - 0.45 * a) + np.array([255, 255, 255]) * 0.45 * a   # faint ghost line
         elif step["kind"] == "add_steam":
             alpha = steam_layer(m, t)[..., None] * a
             img = img * (1 - alpha) + 245 * alpha
         return np.clip(img, 0, 255).astype(np.uint8)
+
+    def _fly(self, img: np.ndarray, base: np.ndarray, m: np.ndarray, a: float) -> np.ndarray:
+        """Lift the object's own pixels (SAM's cut-out from the photo) and carry them out of the nearest
+        edge of the picture, with a soft shadow: the object leaving, played backward. Nothing is drawn
+        that is not in the photo."""
+        ys, xs = np.nonzero(m)
+        if not len(ys):
+            return img
+        y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+        h, w = m.shape
+        cy, cx = (y0 + y1) / 2, (x0 + x1) / 2
+        edges = {(-1, 0): cx, (1, 0): w - cx, (0, -1): cy, (0, 1): h - cy}
+        (vx, vy), near = min(edges.items(), key=lambda kv: kv[1])
+        e = ease(a)
+        dist = near + max(x1 - x0, y1 - y0)
+        dx, dy = vx * dist * e, vy * dist * e - 18 * np.sin(np.pi * e)       # a small lift as it goes
+        scale = 1 + 0.12 * np.sin(np.pi * min(1.0, e * 1.5))
+        sprite = Image.fromarray(base[y0:y1, x0:x1].astype(np.uint8))
+        alpha = Image.fromarray((m[y0:y1, x0:x1] * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1))
+        sw, sh = max(1, int((x1 - x0) * scale)), max(1, int((y1 - y0) * scale))
+        sprite, alpha = sprite.resize((sw, sh), Image.LANCZOS), alpha.resize((sw, sh), Image.LANCZOS)
+        out = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8))
+        px, py = int(cx + dx - sw / 2), int(cy + dy - sh / 2)
+        shade = alpha.filter(ImageFilter.GaussianBlur(8)).point(lambda v: int(v * 0.4 * min(1.0, e * 6)))
+        out.paste(Image.new("RGB", (sw, sh), (0, 0, 0)), (px + 6, py + 14), shade)
+        out.paste(sprite, (px, py), alpha)
+        return np.asarray(out).astype(np.float32)
 
     def _prepare_fill(self, base: np.ndarray, step: dict):
         """Erase, in one pass, everything this event brought: the object itself (remove, move), the drink
@@ -303,7 +366,8 @@ class Rewinder:
         if not hole.any():
             step.update(fill=base.astype(np.float32), hole=hole, eraser="none")
             return
-        filled, step["eraser"] = erase(base, hole, keep, grow_down=step["kind"] != "empty")
+        filled, step["eraser"] = erase(base, hole, keep, grow_down=step["kind"] != "empty",
+                                       smooth=step["kind"] == "empty" and not step["erase"])
         step["fill"] = filled.astype(np.float32)
         step["hole"] = removal_mask(hole, grow_down=step["kind"] != "empty") & ~keep
 
@@ -380,6 +444,7 @@ class Rewinder:
                 t = INTRO + k * PER_EVENT + i / FPS
                 img = with_steam(self._apply(cur, step, a, t), t)
                 pulse = 0.9 * (1 - abs(2 * p - 1) ** 2) if step["kind"] != "remove" else 0
+                img = rewind_glitch(img, 0.8 * np.sin(np.pi * a), t)
                 yield self._decorate(img, step, k + 1, pulse, (k + a) / max(1, n))
             if step["kind"] == "add_steam":
                 steaming.append(step)

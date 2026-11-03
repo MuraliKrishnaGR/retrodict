@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from app.baseline import run_baseline
 from app.agent import Scene, investigate
 from app.perceive import perceive
 from app.quality import check_result
@@ -92,8 +93,15 @@ async def run_photo(models, photo_path, out_dir, progress=None) -> dict:
     trace.step("read", f"{len(states)} objects read, {n_traces} physical traces seen", t)
 
     t = trace.start("investigate")
-    try:
-        found = await investigate(models, scene_ctx, progress=trace.progress)
+    try:                                            # propose: one reading of the whole photo...
+        first = await run_baseline(models, jpeg)
+        proposals = [e["description"] for e in first["events"]]
+    except Exception as e:
+        save_details(e)
+        proposals = []
+    result["proposals"] = proposals
+    try:                                            # ...then prove: the agent checks each claim with its tools
+        found = await investigate(models, scene_ctx, progress=trace.progress, proposals=proposals)
     except Exception as e:                          # a broken agent answer must not sink the run
         save_details(e)                             # ...but keep the exact failing line for fixing it
         found = {"finished": False, "moves": [], "error": f"{type(e).__name__}: {str(e)[:200]}"}

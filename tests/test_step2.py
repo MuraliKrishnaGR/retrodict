@@ -116,8 +116,9 @@ def test_verifier_rejects_and_penalises():
 class StoryModels:
     """Fake models for a tea scene: SAM finds a mug and a packet (and a spoon, if searched);
     Spark answers per pipeline step. `agent` scripts the investigator's moves, turn by turn."""
-    def __init__(self, agent=None, trace_verdict="yes"):
+    def __init__(self, agent=None, trace_verdict="yes", claims=None):
         self.tags, self.images, self.prompts = [], {}, {}
+        self.claims = claims or []                  # the first reading's claims (propose, then prove)
         self.agent = agent
         self.trace_verdict = trace_verdict          # what the verifier says when asked to confirm a trace
 
@@ -167,6 +168,7 @@ class StoryModels:
             return schema.model_validate(script[int(tag.split("_")[1])])
         replies = {
             "list_objects": {"objects": [{"name": "mug"}, {"name": "packet"}]},
+            "baseline": {"summary": "", "events": self.claims},
 
             "reason": self.STORY,
         }
@@ -190,7 +192,7 @@ def test_full_pipeline(tmp_path):
     models = StoryModels()
     res = asyncio.run(run_photo(models, photo, tmp_path / "out"))
 
-    assert models.tags == ["list_objects", "read_o1", "read_o2", "agent_0", "verify", "summary"]  # agent finished at once;
+    assert models.tags == ["list_objects", "read_o1", "read_o2", "baseline", "agent_0", "verify", "summary"]  # agent finished at once;
                                                     # the verifier rejected an event, so the summary is rewritten
     assert [s["step"] for s in res["trace"]] == ["perceive", "read", "investigate", "verify"]
     assert set(res["states"]) == {"o1", "o2"}                                  # imaginary o9 dropped
@@ -316,7 +318,7 @@ def test_agent_zooms_searches_and_cites_what_it_found(tmp_path):
     models = StoryModels(agent=script)
     res = asyncio.run(run_photo(models, photo, tmp_path / "out"))
 
-    assert models.tags == ["list_objects", "read_o1", "read_o2", "agent_0", "agent_1", "agent_2", "agent_3", "verify"]
+    assert models.tags == ["list_objects", "read_o1", "read_o2", "baseline", "agent_0", "agent_1", "agent_2", "agent_3", "verify"]
     assert [m["move"] for m in res["moves"]] == ["zoom", "search", "clock", "finish"]
     assert models.images["agent_1"] != models.images["agent_0"]          # turn after zoom sees the close-up
     zoom = Image.open(__import__("io").BytesIO(models.images["agent_1"]))
@@ -343,10 +345,10 @@ def test_agent_search_skips_things_already_known(tmp_path):
 
 
 def test_agent_out_of_moves_falls_back_to_single_reasoning(tmp_path):
-    script = [{"action": "zoom", "object_id": "o1"}] * 6          # never finishes
+    script = [{"action": "zoom", "object_id": "o1"}] * 9          # never finishes
     models = StoryModels(agent=script)
     res = asyncio.run(run_photo(models, _photo(tmp_path), tmp_path / "out"))
-    assert models.tags[-3:] == ["reason", "verify", "summary"] and "agent_4" in models.tags and "agent_5" not in models.tags
+    assert models.tags[-3:] == ["reason", "verify", "summary"] and "agent_7" in models.tags and "agent_8" not in models.tags
     assert [e["description"] for e in res["events"]] == ["tea was poured", "packet was opened"]
     assert "single reasoning call" in res["trace"][2]["detail"]
 
@@ -626,3 +628,20 @@ def test_the_view_bank_picks_the_light_edits_that_reveal_most_in_this_object():
     assert len(picks) == 2 and picks[0][0] != picks[1][0]
     plain = _stretch(a.mean(-1) / 255, mask)
     assert all(detail_score(s, mask) >= detail_score(plain, mask) * 0.9 for _, s in picks)
+
+
+def test_propose_then_prove_claims_must_be_checked_before_finishing(tmp_path):
+    """The first reading proposes; the agent may not finish until it has searched for the evidence."""
+    claims = [{"description": "Tea was poured into the mug", "minutes_before_min": 0, "minutes_before_max": 30},
+              {"description": "A spoon was used and left out", "minutes_before_min": 0, "minutes_before_max": 30}]
+    script = [{"action": "finish", **StoryModels.STORY},                # refused: nothing checked yet
+              {"action": "search", "phrase": "spoon"},
+              {"action": "finish", **StoryModels.STORY},                # refused: one search so far
+              {"action": "search", "phrase": "crumbs"},
+              {"action": "finish", **StoryModels.STORY}]
+    models = StoryModels(agent=script, claims=claims)
+    res = asyncio.run(run_photo(models, _photo(tmp_path), tmp_path / "out"))
+    assert res["proposals"] == ["Tea was poured into the mug", "A spoon was used and left out"]
+    assert "C1. Tea was poured into the mug" in models.prompts["agent_0"]
+    assert [m["move"] for m in res["moves"]] == ["check", "search", "check", "search", "finish"]
+    assert [e["description"] for e in res["events"]][:2] == ["tea was poured", "packet was opened"]

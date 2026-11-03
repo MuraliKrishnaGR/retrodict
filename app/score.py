@@ -63,9 +63,34 @@ def match_events(key: dict, events: list) -> dict:
     return out
 
 
-def score_run(result: dict, key: dict) -> dict:
+def load_judged(run_dir, result: dict):
+    """The blind judge's reading of this run, or None if there is none or it was made for an older run
+    (a re-run replaces the events, so a stale reading must never be applied to them)."""
+    p = Path(run_dir) / "judge.json"
+    if not p.exists():
+        return None
+    j = json.loads(p.read_text(encoding="utf-8"))
+    now = [e["description"] for e in result.get("events", []) if e.get("status") != "rejected"]
+    return j if j.get("claims_text") == now else None
+
+
+def judged_matches(key: dict, events: list, judged: dict) -> dict:
+    """{key event id: event} from a judge's {event id: [key ids it covers]}. One event may cover several
+    real events ("banana, apple and orange were chopped"); each real event takes the first event covering it."""
+    by_id = {e["id"]: e for e in events}
+    out = {}
+    for e in events:
+        for kid in judged.get("covers", {}).get(e["id"], []):
+            if kid not in out and kid in {k["id"] for k in key["events"]}:
+                out[kid] = by_id[e["id"]]
+    return out
+
+
+def score_run(result: dict, key: dict, judged: dict | None = None) -> dict:
+    """Without `judged`, events are matched by the key's word patterns; with it, by a blind judge's
+    reading (scripts/judge.py), which handles wording the patterns miss."""
     events = [e for e in result.get("events", []) if e.get("status") != "rejected"]
-    matched = match_events(key, events)
+    matched = judged_matches(key, events, judged) if judged else match_events(key, events)
     rows = []
     for k in key["events"]:
         t_lo, t_hi = true_minutes(key, k)
@@ -85,7 +110,7 @@ def score_run(result: dict, key: dict) -> dict:
     start = {k["id"]: k["seconds"][0] for k in key["events"]}
     for i, a in enumerate(found):
         for b in found[i + 1:]:
-            if start[a["id"]] == start[b["id"]]:
+            if start[a["id"]] == start[b["id"]] or a["event"] == b["event"]:
                 continue
             pairs += 1
             real = start[a["id"]] < start[b["id"]]
@@ -95,12 +120,19 @@ def score_run(result: dict, key: dict) -> dict:
                 first, then = (a, b) if real else (b, a)
                 wrong.append(f"{first['id']} happened before {then['id']}")
     used = {r["event"] for r in found}
-    unsupported = [{"event": e["id"], "text": e["description"]} for e in events if e["id"] not in used]
+    wrong_ids = set((judged or {}).get("wrong", []))
+    unsupported = [{"event": e["id"], "text": e["description"], "wrong": e["id"] in wrong_ids}
+                   for e in events if e["id"] not in used]
     dated = [r for r in found if r["dated"]]
-    by_event = {r["event"]: r["id"] for r in found}
+    keys_of = {}
+    for r in found:
+        keys_of.setdefault(r["event"], []).append(r["id"])
     return {
+        "matched_by": "blind judge" if judged else "word patterns",
         "events": rows,
-        "retro": [{"event": e["id"], "text": e["description"], "key": by_event.get(e["id"])} for e in events],
+        "retro": [{"event": e["id"], "text": e["description"], "key": (keys_of.get(e["id"]) or [None])[0],
+                   "keys": keys_of.get(e["id"], [])} for e in events],
+        "false_claims": [{"event": e["id"], "text": e["description"]} for e in events if e["id"] in wrong_ids],
         "found": len(found), "total": len(rows),
         "dated": len(dated), "covered": sum(r["covered"] for r in dated),
         "median_width_min": _median([r["width"] for r in dated]),

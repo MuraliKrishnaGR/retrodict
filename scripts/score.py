@@ -28,10 +28,14 @@ def main():
     run = Path(a.run)
     result = json.loads((run / "result.json").read_text(encoding="utf-8"))
     key = score.load_key(a.key)
-    s = score.score_run(result, key)
+    judged = score.load_judged(run, result)
+    if (run / "judge.json").exists() and judged is None:
+        print("(judge.json is from an older run: matching by word patterns; run scripts/judge.py again)")
+    s = score.score_run(result, key, judged)
     who = "The baseline" if str(result.get("kind", "")).startswith("baseline") else "Retrodict"
 
-    print(f"Scene {key['video']} ({key.get('split', '?')} scene). Times are minutes before the photo.\n")
+    print(f"Scene {key['video']} ({key.get('split', '?')} scene). Matched by {s['matched_by']}. "
+          "Times are minutes before the photo.\n")
     for r in s["events"]:
         real = mins(*r["true_min"])
         if not r["found"]:
@@ -43,7 +47,7 @@ def main():
                 when = f"{mins(*r['range_min'])}, " + ("in range" if r["covered"] else "OUT OF RANGE")
             print(f"  FOUND    {r['what']}  (really {real}; {who} {r['event']}: {when})")
     for u in s["unsupported"]:
-        print(f"  NOT IN KEY  {u['event']}: {u['text']}")
+        print(f"  {'WRONG     ' if u.get('wrong') else 'NOT IN KEY'}  {u['event']}: {u['text']}")
 
     lo, hi = s["real_span_min"]
     print(f"\nFound {s['found']} of {s['total']} real events. They really happened {lo:g}-{hi:g} min before the photo.")
