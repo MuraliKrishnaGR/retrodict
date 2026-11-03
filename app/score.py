@@ -131,7 +131,7 @@ def score_run(result: dict, key: dict, judged: dict | None = None) -> dict:
         "matched_by": "blind judge" if judged else "word patterns",
         "events": rows,
         "retro": [{"event": e["id"], "text": e["description"], "key": (keys_of.get(e["id"]) or [None])[0],
-                   "keys": keys_of.get(e["id"], [])} for e in events],
+                   "keys": keys_of.get(e["id"], []), "wrong": e["id"] in wrong_ids} for e in events],
         "false_claims": [{"event": e["id"], "text": e["description"]} for e in events if e["id"] in wrong_ids],
         "found": len(found), "total": len(rows),
         "dated": len(dated), "covered": sum(r["covered"] for r in dated),

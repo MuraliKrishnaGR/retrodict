@@ -1,6 +1,7 @@
 // Retrodict page: earlier photos, a live investigation, the time ruler and the evidence for each event.
 const $ = (id) => document.getElementById(id);
-const STEP_NAMES = { perceive: "Find the objects", read: "Read each object", investigate: "Investigate",
+const STEP_NAMES = { perceive: "Find the objects", propose: "Propose what happened", gather: "Find the evidence",
+                     read: "Read and name each object", investigate: "Investigate", second_look: "Second look",
                      verify: "Check every claim", rewind: "Make the rewind" };
 const VERDICT = { yes: "confirmed", partly: "partly right", unclear: "can't tell", no: "contradicted" };
 let current = null;
@@ -63,7 +64,8 @@ function moveText(m) {
 
 function renderSteps(trace, running) {
   const done = Object.fromEntries((trace || []).map((s) => [s.step, s]));
-  const order = ["perceive", "read", "investigate", "verify", "rewind"];
+  const order = ["perceive", "propose", "gather", "read", "investigate", "second_look", "verify", "rewind"]
+    .filter((k) => !done.verify || done[k] || k === "rewind");      // a finished run lists only its own steps
   $("steps").innerHTML = order.map((k) => {
     const s = done[k];
     const cls = s ? "done" : (running === k ? "running" : "");
@@ -80,8 +82,9 @@ function setView(view) {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.view === view));
   const base = `/files/${encodeURIComponent(current.name)}/`;
   const video = $("rewind"), img = $("photo");
-  if (view === "rewind" && current.files.includes("rewind.mp4")) {
-    img.hidden = true; video.hidden = false; video.src = base + "rewind.mp4"; video.play().catch(() => {});
+  const clip = view === "rewind" ? "rewind.mp4" : view === "proof" ? "proof_rewind.mp4" : null;
+  if (clip && current.files.includes(clip)) {
+    img.hidden = true; video.hidden = false; video.src = base + clip; video.play().catch(() => {});
   } else {
     video.pause(); video.hidden = true; img.hidden = false;
     img.src = base + (view === "objects" && current.files.includes("overlay.png") ? "overlay.png" : "input.jpg");
@@ -92,6 +95,7 @@ function render() {
   const res = current.result;
   $("empty").hidden = true; $("stage").hidden = false;
   document.querySelector('.tabs [data-view="rewind"]').hidden = !current.files.includes("rewind.mp4");
+  document.querySelector('.tabs [data-view="proof"]').hidden = !current.files.includes("proof_rewind.mp4");
   setView(current.files.includes("rewind.mp4") ? "rewind" : "photo");   // the clip plays as soon as a run opens
   $("note").textContent = res.photo_note || "";
   $("summary").textContent = res.summary || "";
@@ -160,7 +164,12 @@ function renderCheck(data) {
     ? "Practice scene: it was used while building Retrodict, so this is not a fair test." : "";
   const parts = [`Found ${s.found} of ${s.total} things that really happened`];
   if (s.order_pairs) parts.push(`${s.order_agree} of ${s.order_pairs} pairs in the right order`);
-  parts.push(s.unsupported.length === 1 ? "1 thing said that didn't happen" : `${s.unsupported.length} things said that didn't happen`);
+  if (s.matched_by === "blind judge") {
+    const n = (s.false_claims || []).length;
+    parts.push(n === 1 ? "1 claim judged wrong" : `${n} claims judged wrong`);
+  } else {
+    parts.push(s.unsupported.length === 1 ? "1 thing said that didn't happen" : `${s.unsupported.length} things said that didn't happen`);
+  }
   $("c-sum").textContent = parts.join(" · ") + ".";
 
   const wit = Object.fromEntries(((w && w.events) || []).map((r) => [r.id, r]));
@@ -176,8 +185,9 @@ function renderCheck(data) {
       ${seen ? `<span class="witness" title="${esc(v.label || "")}">${esc(seen)}</span>` : ""}</span></li>`;
   }).join("");
   const right = retro.map((r, i) =>
-    `<li class="${r.key ? "" : "made-up"}" data-key="${esc(r.key || "")}"><span class="num">${i + 1}</span>
-      <span>${esc(shortText(r.text))}${r.key ? "" : `<span class="status missed">Didn't happen</span>`}</span></li>`).join("");
+    `<li class="${r.key && !r.wrong ? "" : "made-up"}" data-keys="${esc((r.keys && r.keys.length ? r.keys : [r.key || ""]).join(" "))}"><span class="num">${i + 1}</span>
+      <span>${esc(shortText(r.text))}${r.wrong ? `<span class="status missed">Judged wrong</span>`
+        : r.key ? "" : `<span class="status other">Not in the answer key</span>`}</span></li>`).join("");
   $("c-order").innerHTML = `<div class="col-head">What really happened (video)</div><div></div>
     <div class="col-head">What Retrodict said (photo only)</div>
     <ol class="real">${left}</ol><svg class="links" aria-hidden="true"></svg><ol class="said">${right}</ol>`;
@@ -200,8 +210,8 @@ function drawLinks() {
   if (!svg || box.closest("[hidden]")) return;
   const sb = svg.getBoundingClientRect();
   const leftOf = Object.fromEntries([...box.querySelectorAll("ol.real li")].map((li, i) => [li.dataset.key, { li, i }]));
-  const pairs = [...box.querySelectorAll("ol.said li")].map((li, j) => ({ j, li, l: leftOf[li.dataset.key] }))
-    .filter((p) => p.li.dataset.key && p.l);
+  const pairs = [...box.querySelectorAll("ol.said li")].flatMap((li, j) =>      // one claim may cover several events
+    (li.dataset.keys || "").split(" ").filter((k) => k && leftOf[k]).map((k) => ({ j, li, l: leftOf[k] })));
   const mid = (el) => { const r = el.getBoundingClientRect(); return r.top + Math.min(r.height / 2, 14) - sb.top; };
   svg.setAttribute("viewBox", `0 0 ${sb.width} ${sb.height}`);
   svg.innerHTML = pairs.map((p) => {

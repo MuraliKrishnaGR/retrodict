@@ -146,6 +146,7 @@ main { padding: 0 32px 48px; }
 .links path.wrong { stroke: var(--no); stroke-dasharray: 5 4; }
 .status { display: block; font-size: 13px; font-weight: 700; }
 .status.missed { color: var(--no); }
+.status.other { color: var(--muted); }
 .witness { display: block; font-size: 13px; color: var(--muted); }
 .c-legend { color: var(--muted); font-size: 14px; display: flex; gap: 4px 8px; flex-wrap: wrap; margin: 12px 0 6px; }
 .lg { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; margin-right: 10px; }
