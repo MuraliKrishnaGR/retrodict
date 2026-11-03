@@ -208,7 +208,8 @@ class Rewinder:
                 kind = "mark"
             erase_ids = [oid] if kind in ("remove", "move") else []
             erase_ids += self._left_behind(e, oid)          # crumbs "left" by eating came with this event
-            steps.append({"event": e, "oid": oid, "kind": kind, "erase": erase_ids})
+            step = {"event": e, "oid": oid, "kind": kind, "erase": erase_ids}
+            steps.append(step)
         return steps
 
     def _left_behind(self, e: dict, oid: str) -> list:
@@ -271,13 +272,11 @@ class Rewinder:
             if "fill" not in step:
                 self._prepare_fill(base, step)
             if step["hole"].any():
-                ghost = 1.0 if step["eraser"] == "lama" else GHOST     # a realistic fill needs no ghost
+                ghost = 1.0 if step["kind"] == "empty" else GHOST        # a removed object keeps a faint ghost
                 soft = np.array(Image.fromarray(step["hole"].astype(np.uint8) * 255).filter(ImageFilter.GaussianBlur(3)))
                 k = (soft.astype(np.float32) / 255.0)[..., None] * a * ghost
                 img = img * (1 - k) + step["fill"] * k
-            if step["kind"] in ("remove", "move") and step["eraser"] != "lama":
-                # only over a rough fill: a white outline over a realistic LaMa fill reads as a defect
-                # (seen on the milk run: a white squiggle where the spoon was); the pulse marks the place instead
+            if step["kind"] in ("remove", "move"):
                 edge = outline(m, 2)
                 img[edge] = img[edge] * (1 - 0.45 * a) + np.array([255, 255, 255]) * 0.45 * a   # faint ghost line
         elif step["kind"] == "add_steam":

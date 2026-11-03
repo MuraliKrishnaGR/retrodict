@@ -73,3 +73,9 @@ def test_guessed_times_are_not_scored_as_right():
     s = score.score_run({"events": [ev(1, "Milk poured", 0, 60, clock="no_clock")]}, KEY)
     assert (s["found"], s["dated"], s["covered"]) == (1, 0, 0) and s["median_width_min"] is None
     assert s["events"][0]["range_min"] is None and s["real_span_min"] == [0.33, 2.83]
+
+
+def test_cutting_words_v_jepa_uses():
+    assert score.witness_kinds("Poking a hole into [something soft]") == {"cut"}
+    assert score.witness_kinds("Bending [something] until it breaks") == {"cut"}
+    assert score.witness_kinds("Piling [something] up") == {"add_into"}

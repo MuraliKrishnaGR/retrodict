@@ -29,6 +29,10 @@ WITNESS_KINDS = [
     (r"^(Putting|Laying|Placing|Letting)", {"put_down"}),
     (r"^(Picking \[something\] up|Lifting)", {"pick_up"}),
     (r"^(Opening|Tearing|Unfolding|Peeling)", {"open"}),
+    # it has no word for cutting: a knife through fruit reads as these (salad_01, 3 Nov)
+    (r"^(Poking a hole into|Bending \[something\] until it breaks|Tearing|Cutting|Breaking)", {"cut"}),
+    (r"^Piling", {"add_into"}),
+    (r"^Taking \[one of many", {"pick_up"}),
 ]
 WITNESS_MIN_PROB = 0.3
 WITNESS_SLACK_S = 2.0

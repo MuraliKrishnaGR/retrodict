@@ -29,6 +29,7 @@ def main():
     result = json.loads((run / "result.json").read_text(encoding="utf-8"))
     key = score.load_key(a.key)
     s = score.score_run(result, key)
+    who = "The baseline" if str(result.get("kind", "")).startswith("baseline") else "Retrodict"
 
     print(f"Scene {key['video']} ({key.get('split', '?')} scene). Times are minutes before the photo.\n")
     for r in s["events"]:
@@ -40,7 +41,7 @@ def main():
                 when = "no time given (no clue in the photo)"
             else:
                 when = f"{mins(*r['range_min'])}, " + ("in range" if r["covered"] else "OUT OF RANGE")
-            print(f"  FOUND    {r['what']}  (really {real}; Retrodict {r['event']}: {when})")
+            print(f"  FOUND    {r['what']}  (really {real}; {who} {r['event']}: {when})")
     for u in s["unsupported"]:
         print(f"  NOT IN KEY  {u['event']}: {u['text']}")
 
@@ -50,7 +51,7 @@ def main():
         print(f"Times: {s['dated']} of {s['found']} found events were dated by a clue; {s['covered']} of those contain "
               f"the real time; typical width {s['median_width_min']:g} min.")
     else:
-        print("Times: no clue in the photo dated any of them, so Retrodict gave no times (it says 'time unknown').")
+        print(f"Times: no confirmed clue dated any of them, so {who} gives no times ('time unknown').")
     print(f"Order: {s['order_agree']} of {s['order_pairs']} pairs right"
           + (f" (wrong: {'; '.join(s['order_wrong'])})" if s["order_wrong"] else "") + ".")
     print(f"Events not in the key: {len(s['unsupported'])}.")

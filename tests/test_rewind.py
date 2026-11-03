@@ -117,27 +117,20 @@ def test_undo_is_the_opposite_of_what_the_event_says():
     assert undo_kind({"description": "The drink was still steaming", "undo": "add_steam"}) == "add_steam"
 
 
-def test_eraser_runs_the_model_on_a_crop_and_never_erases_a_neighbour(monkeypatch):
-    """The LaMa path: the model sees a crop padded to multiples of 8, the hole includes the object's
-    reflection below it, and a neighbouring object inside that reach is protected."""
-    torch = __import__("pytest").importorskip("torch")
+def test_eraser_fills_the_object_and_its_reflection_and_never_a_neighbour():
+    """The hole includes the object's reflection below it, and a neighbouring object inside that reach is
+    protected. OpenCV only: no AI model other than Meta's runs (hackathon rule)."""
     from app import eraser
-    seen = {}
-
-    def fake_model(image, mask):
-        seen["shape"] = tuple(image.shape)
-        return torch.full_like(image, 0.5)                    # "fills" everything with grey
-
-    monkeypatch.setattr(eraser, "load", lambda: fake_model)
     img = np.full((120, 200, 3), 30, np.uint8)
-    obj = np.zeros((120, 200), bool); obj[30:70, 80:110] = True        # a glass
-    nb = np.zeros((120, 200), bool); nb[75:90, 90:120] = True          # a packet just below it
+    img[30:70, 80:110] = 220                                            # a bright glass
+    img[75:90, 90:120] = (200, 40, 40)                                  # a red packet just below it
+    obj = np.zeros((120, 200), bool); obj[30:70, 80:110] = True
+    nb = np.zeros((120, 200), bool); nb[75:90, 90:120] = True
     out, method = eraser.erase(img, obj, keep=nb)
-    assert method == "lama" and seen["shape"][2] % 8 == 0 and seen["shape"][3] % 8 == 0
-    assert out[50, 95, 0] > 100                                         # the glass is gone
-    assert out[85, 100, 0] == 30                                        # the packet below is untouched
-    assert out[95, 95, 0] > 100                                         # its reflection further down went too
-    assert out[10, 10, 0] == 30                                         # far away: untouched
+    assert method == "opencv"
+    assert out[50, 95].mean() < 120                                     # the glass is gone
+    assert tuple(out[85, 100]) == (200, 40, 40)                         # the packet below is untouched
+    assert tuple(out[10, 10]) == (30, 30, 30)                           # far away: untouched
 
 
 def test_poured_drink_is_erased_from_the_cup_and_left_behind_crumbs_go_too(tmp_path):
@@ -168,3 +161,13 @@ def test_poured_drink_is_erased_from_the_cup_and_left_behind_crumbs_go_too(tmp_p
     assert abs(before_crumbs[107, 123] - 30).max() < 40                # crumbs gone: counter colour again
     assert before_milk[48, 65].mean() < 200                            # milk gone from the mug's opening
     assert abs(before_milk[85, 65] - img[85, 65].astype(int)).max() < 15   # the mug body itself stays
+
+
+def test_no_non_meta_model_code_in_the_app():
+    """Hackathon rule (confirmed 3 Nov): every AI model called at runtime is a Meta model."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    code = " ".join(p.read_text(encoding="utf-8").lower() for p in list((root / "app").rglob("*.py")) +
+                    list((root / "scripts").glob("*.py")))
+    for name in ("big-lama", "qwen", "gradio_client", "stable-diffusion", "diffusers"):
+        assert name not in code, name

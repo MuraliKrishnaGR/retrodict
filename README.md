@@ -31,9 +31,19 @@ It is a best guess from the clues in the photo, not proof: every result says so,
 5. **Rewind.** The real photo, walked back through the events, each step the opposite of its event: an
    object that arrived (or was moved here) is erased, a drink poured into a cup is erased so the cup stands
    empty, crumbs left by eating are erased, steam is drawn and labelled as an illustration, and anything
-   that cannot be shown honestly (a wrapper resealed) is marked, not painted. Erasing uses **LaMa**, an
-   open-source inpainting model (Apache-2.0), as a helper on the CPU: SAM's masks decide what goes, the
-   timeline decides when, and other objects are protected. If it is unavailable, a simple fill is used.
+   that cannot be shown honestly (a wrapper resealed) is marked, not painted. Each caption says what the
+   scene was like *before* ("Before: the mug was empty"), with a step counter.
+
+## Models and where they run
+Every AI model Retrodict uses is a Meta model:
+- **Muse Spark Open**: all reasoning and vision (Baseten partner inference, OpenAI-compatible API).
+- **SAM 3.1**: object outlines and searches inside objects (Meta's open weights, from the Hugging Face
+  mirror `unsloth/sam3.1`; local, CPU, `transformers`).
+- **V-JEPA 2** (`facebook/vjepa2-vitl-fpc16-256-ssv2`): watches the real video for the evaluation only
+  (local, CPU). Retrodict itself never sees the video.
+
+The rewind erases with OpenCV's inpainting, a classic algorithm, not an AI model. No other AI model is
+used anywhere: the hackathon requires every model called at runtime to be a Meta model.
 
 ## Honest timing
 - **Trace clocks:** physical rules ("visible steam lasts minutes", "a skin forms on milk as it cools")
