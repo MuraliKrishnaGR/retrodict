@@ -173,13 +173,19 @@ class Scene:
         sheet.save(self.out_dir / "evidence.jpg", quality=88)
         return to_jpeg(sheet)
 
-    def add_found(self, phrase: str, items: list) -> list:
-        """Add SAM finds that are confident and not already known. Returns the new object ids."""
+    def add_found(self, phrase: str, items: list, known: list = None, max_new: int = MAX_NEW_PER_SEARCH) -> list:
+        """Add SAM finds that are confident and not already known. Returns the new object ids.
+        `known`, if given, collects the ids of existing objects a confident find turned out to be."""
         new_ids = []
         for it in sorted(items, key=lambda x: -x.get("score", 0)):
-            if len(new_ids) >= MAX_NEW_PER_SEARCH or it.get("score", 0) < SEARCH_MIN_SCORE:
+            if it.get("score", 0) < SEARCH_MIN_SCORE or it["mask"].sum() < 50:
                 continue
-            if it["mask"].sum() < 50 or any(mask_iou(it["mask"], d["mask"]) >= IOU_DUPLICATE for d in self.drawn):
+            same = next((d["id"] for d in self.drawn if mask_iou(it["mask"], d["mask"]) >= IOU_DUPLICATE), None)
+            if same:
+                if known is not None and same not in known:
+                    known.append(same)
+                continue
+            if len(new_ids) >= max_new:
                 continue
             oid = f"o{len(self.objects) + 1}"
             mask_path = self.out_dir / "masks" / f"{oid}.png"
@@ -197,6 +203,15 @@ class Scene:
         return new_ids
 
 
+GATHERED_NOTE = """A first reading of the whole photo made these CLAIMS. They are leads to check, not facts.
+SAM 3.1 has already searched the photo for what each claim rests on; what it found is listed after it:
+{lines}
+Use your moves to decide, not to hunt: zoom on an object when a detail decides a claim (is the fruit cut,
+is the cap off, is there water in the glass, is a cut surface pale or browned). Search again only for
+something still missing, described another way. Drop claims nothing in the photo supports.
+
+"""
+
 CLAIMS_NOTE = """A first reading of the whole photo made these CLAIMS. They are leads to check, not facts:
 {lines}
 Check them: for each, make sure the object it rests on is a numbered object. If it is not (a peel, a cap,
@@ -206,14 +221,28 @@ zoom when a detail decides it. Also search for leftovers the reading may have mi
 """
 
 
-def claims_text(proposals: list) -> str:
+def claims_text(proposals: list, labels: dict = None) -> str:
+    """Plain claims (strings), or gathered claims ({'text', 'look_for', 'found'}) with their evidence."""
     if not proposals:
         return ""
-    lines = "\n".join(f"  C{i}. {p}" for i, p in enumerate(proposals, 1))
-    return CLAIMS_NOTE.format(lines=lines)
+    if isinstance(proposals[0], str):
+        lines = "\n".join(f"  C{i}. {p}" for i, p in enumerate(proposals, 1))
+        return CLAIMS_NOTE.format(lines=lines)
+    labels = labels or {}
+    rows = []
+    for i, c in enumerate(proposals, 1):
+        if c.get("found"):
+            ev = "found " + ", ".join(f"{o} ({labels.get(o, '?')})" for o in c["found"])
+        elif c.get("look_for"):
+            ev = "nothing found for " + ", ".join(f"'{p}'" for p in c["look_for"])
+        else:
+            ev = "nothing searched"
+        rows.append(f"  C{i}. {c['text']}  ->  {ev}")
+    return GATHERED_NOTE.format(lines="\n".join(rows))
 
 
-async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress=None, proposals=None) -> dict:
+async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress=None, proposals=None,
+                      min_searches: int = MIN_SEARCHES) -> dict:
     """Runs the tool loop. Returns {'summary','events','moves','finished'}; events are grounded and clocked.
     `proposals`: claims from a first reading of the whole photo, which the agent must check with its tools
     (propose, then prove)."""
@@ -229,18 +258,18 @@ async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress
         prompt = AGENT_PROMPT.format(
             image_note=image_note, states=states_text(scene.states, scene.labels),
             clocks=clock_table_text(seen), history="\n".join(history) or "(nothing yet)",
-            all_traces=all_traces, moves_left=left, claims=claims_text(proposals),
+            all_traces=all_traces, moves_left=left, claims=claims_text(proposals, scene.labels),
             must_finish="" if left else " You MUST finish now.")
         step = await models.spark_json(prompt, AgentStep, jpeg=image, tag=f"agent_{turn}")
         if left == 0 and step.action != "finish":
             break                                       # out of moves without an answer: caller falls back
         action = step.action
-        if action == "finish" and left and proposals and searches < MIN_SEARCHES:
+        if action == "finish" and left and proposals and searches < min_searches:
             # code rule, not a request: claims must be checked against the photo before the answer
             moves.append({"move": "check", "thought": step.thought,
                           "result": "not yet: search for the objects the claims rest on first"})
             history.append(f"{turn + 1}. finish refused -> search for the evidence of the claims first "
-                           f"({MIN_SEARCHES - searches} more search(es))")
+                           f"({min_searches - searches} more search(es))")
             if progress:
                 progress("move", moves[-1])
             continue

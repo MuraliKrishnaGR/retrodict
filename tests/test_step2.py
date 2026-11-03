@@ -168,7 +168,8 @@ class StoryModels:
             return schema.model_validate(script[int(tag.split("_")[1])])
         replies = {
             "list_objects": {"objects": [{"name": "mug"}, {"name": "packet"}]},
-            "baseline": {"summary": "", "events": self.claims},
+            "propose": {"summary": "", "events": self.claims},
+            "second_look": {"summary": "", "events": []},
 
             "reason": self.STORY,
         }
@@ -192,9 +193,9 @@ def test_full_pipeline(tmp_path):
     models = StoryModels()
     res = asyncio.run(run_photo(models, photo, tmp_path / "out"))
 
-    assert models.tags == ["list_objects", "read_o1", "read_o2", "baseline", "agent_0", "verify", "summary"]  # agent finished at once;
+    assert models.tags == ["list_objects", "propose", "read_o1", "read_o2", "agent_0", "verify", "summary"]  # agent finished at once;
                                                     # the verifier rejected an event, so the summary is rewritten
-    assert [s["step"] for s in res["trace"]] == ["perceive", "read", "investigate", "verify"]
+    assert [s["step"] for s in res["trace"]] == ["perceive", "propose", "read", "investigate", "second_look", "verify"]
     assert set(res["states"]) == {"o1", "o2"}                                  # imaginary o9 dropped
     assert res["states"]["o1"]["traces"] == ["liquid_film"]
     assert res["states"]["o2"]["traces"] == ["open_package", "crumbs"]        # unknown 'glitter' dropped
@@ -318,7 +319,7 @@ def test_agent_zooms_searches_and_cites_what_it_found(tmp_path):
     models = StoryModels(agent=script)
     res = asyncio.run(run_photo(models, photo, tmp_path / "out"))
 
-    assert models.tags == ["list_objects", "read_o1", "read_o2", "baseline", "agent_0", "agent_1", "agent_2", "agent_3", "verify"]
+    assert models.tags == ["list_objects", "propose", "read_o1", "read_o2", "agent_0", "agent_1", "agent_2", "agent_3", "second_look", "verify"]
     assert [m["move"] for m in res["moves"]] == ["zoom", "search", "clock", "finish"]
     assert models.images["agent_1"] != models.images["agent_0"]          # turn after zoom sees the close-up
     zoom = Image.open(__import__("io").BytesIO(models.images["agent_1"]))
@@ -350,7 +351,7 @@ def test_agent_out_of_moves_falls_back_to_single_reasoning(tmp_path):
     res = asyncio.run(run_photo(models, _photo(tmp_path), tmp_path / "out"))
     assert models.tags[-3:] == ["reason", "verify", "summary"] and "agent_7" in models.tags and "agent_8" not in models.tags
     assert [e["description"] for e in res["events"]] == ["tea was poured", "packet was opened"]
-    assert "single reasoning call" in res["trace"][2]["detail"]
+    assert "single reasoning call" in res["trace"][3]["detail"]
 
 
 def test_agent_crash_falls_back(tmp_path):
@@ -361,7 +362,7 @@ def test_agent_crash_falls_back(tmp_path):
                 raise ValueError("model returned nonsense twice")
             return await super().spark_json(prompt, schema, jpeg, tag)
     res = asyncio.run(run_photo(Broken(), _photo(tmp_path), tmp_path / "out"))
-    assert len(res["events"]) == 2 and "ValueError" in res["trace"][2]["detail"]
+    assert len(res["events"]) == 2 and "ValueError" in res["trace"][3]["detail"]
 
 
 def test_bad_moves_are_reported_not_fatal(tmp_path):
@@ -530,7 +531,7 @@ def test_microscope_search_finds_small_things_inside_an_object(tmp_path):
             return await super().sam_segment(jpeg, w, h, concept)
 
     res = asyncio.run(run_photo(Spy(agent=script), _photo(tmp_path, size=(2000, 1600)), tmp_path / "out"))
-    assert calls[-1] == (352, 352, "spoon")                      # the 352-px close-up from the original
+    assert (352, 352, "spoon") in calls                      # the 352-px close-up from the original
     assert res["moves"][0]["result"] == "found o3 (spoon) in or around o1"
     spoon = next(o for o in res["objects"] if o["id"] == "o3")
     l, t, r, b = spoon["bbox"]                                   # crop px (12..40, 50..58) / 1.953 -> scene px
@@ -630,18 +631,117 @@ def test_the_view_bank_picks_the_light_edits_that_reveal_most_in_this_object():
     assert all(detail_score(s, mask) >= detail_score(plain, mask) * 0.9 for _, s in picks)
 
 
-def test_propose_then_prove_claims_must_be_checked_before_finishing(tmp_path):
-    """The first reading proposes; the agent may not finish until it has searched for the evidence."""
-    claims = [{"description": "Tea was poured into the mug", "minutes_before_min": 0, "minutes_before_max": 30},
-              {"description": "A spoon was used and left out", "minutes_before_min": 0, "minutes_before_max": 30}]
-    script = [{"action": "finish", **StoryModels.STORY},                # refused: nothing checked yet
-              {"action": "search", "phrase": "spoon"},
-              {"action": "finish", **StoryModels.STORY},                # refused: one search so far
-              {"action": "search", "phrase": "crumbs"},
-              {"action": "finish", **StoryModels.STORY}]
-    models = StoryModels(agent=script, claims=claims)
+def test_propose_gather_prove(tmp_path):
+    """Propose names what each claim rests on; SAM finds it before the agent starts (a new spoon, the known
+    mug), the new find is read like any object, and the agent sees each claim with its evidence."""
+    claims = [{"description": "Tea was poured into the mug", "look_for": ["Mug"]},
+              {"description": "A spoon was used and left out", "look_for": ["spoon", "white sugar bowl"]}]
+    models = StoryModels(claims=claims)
     res = asyncio.run(run_photo(models, _photo(tmp_path), tmp_path / "out"))
     assert res["proposals"] == ["Tea was poured into the mug", "A spoon was used and left out"]
-    assert "C1. Tea was poured into the mug" in models.prompts["agent_0"]
-    assert [m["move"] for m in res["moves"]] == ["check", "search", "check", "search", "finish"]
-    assert [e["description"] for e in res["events"]][:2] == ["tea was poured", "packet was opened"]
+    assert [s["step"] for s in res["trace"]] == ["perceive", "propose", "gather", "read", "investigate", "second_look", "verify"]
+    assert [c["found"] for c in res["claims"]] == [["o1"], ["o3"]]            # mug already known, spoon is new
+    assert res["gather"][2]["searched_as"] == "sugar bowl" and not res["gather"][2]["new"]
+    assert "read_o3" in models.tags                                         # the new find is read too
+    prompt = models.prompts["agent_0"]
+    assert "C1. Tea was poured into the mug  ->  found o1 (mug)" in prompt
+    assert "C2. A spoon was used and left out  ->  found o3 (spoon)" in prompt
+    assert "You have 5 tool move(s) left" in prompt                         # less to do: fewer moves
+    assert [m["move"] for m in res["moves"]] == ["search", "search", "search", "finish"]  # no refusal needed
+
+
+def test_claims_without_gathering_must_still_be_searched_for(tmp_path):
+    """The code rule stays for plain claims: no finish before two searches."""
+    from app.agent import claims_text
+    assert "C1. a" in claims_text(["a"]) and "search" in claims_text(["a"])
+    assert claims_text([]) == ""
+    text = claims_text([{"text": "x", "look_for": ["glass"], "found": []}], {})
+    assert "nothing found for 'glass'" in text
+
+
+def test_cut_fruit_browning_is_a_clock():
+    """Fresh, pale cut apple or banana dates the cutting to within about half an hour; browned is older."""
+    from app.clocks import LOOKS, apply_clock, clock_for
+    from app.schemas import ObjectState
+    assert (clock_for("fresh_cut").min_minutes, clock_for("fresh_cut").max_minutes) == (0, 30)
+    assert clock_for("browned_cut").min_minutes > 0 and "citrus" in LOOKS["fresh_cut"]
+    assert apply_clock(0, 120, "fresh_cut") == (0, 30, "narrowed_by_clock")
+    assert ObjectState(object_id="o1", traces=["fresh cut"]).traces == ["fresh_cut"]
+
+
+def test_objects_get_their_specific_names():
+    """'peel 1..3' from the first listing become what each close-up shows; shared names are numbered."""
+    from app.read_state import name_objects
+    objects = [{"id": "o1", "label": "peel 1"}, {"id": "o2", "label": "peel 2"}, {"id": "o3", "label": "peel 3"},
+               {"id": "o4", "label": "bowl"}, {"id": "o5", "label": "lid"}]
+    states = {"o1": {"name": "Banana peel"}, "o2": {"name": "orange_peel"}, "o3": {"name": "banana peel"},
+              "o4": {"name": ""}, "o5": {"name": "object"}}
+    drawn = [{"id": "o2", "label": "peel 2"}]
+    out = name_objects(objects, states, drawn)
+    assert [o["label"] for o in objects] == ["banana peel 1", "orange peel", "banana peel 2", "bowl", "lid"]
+    assert out == {"o1": "banana peel 1", "o2": "orange peel", "o3": "banana peel 2"}
+    assert objects[0]["first_label"] == "peel 1" and drawn[0]["label"] == "orange peel"
+
+
+def test_physical_order_rules():
+    """Peel before cut (same fruit), cut before into the bowl, into the bowl before mixing, open before
+    pouring. The model's order stays wherever no rule applies."""
+    from app.order import order_by_rules, stage
+    ev = lambda d: {"description": d, "evidence": []}
+    events = [ev("Someone sliced the banana"), ev("Someone peeled the orange"), ev("Someone stirred the salad"),
+              ev("The fruit was gathered into the steel bowl"), ev("Someone peeled the banana"),
+              ev("Water was poured into the tumbler"), ev("The bottle was opened and its cap set aside")]
+    out = [e["description"] for e in order_by_rules(events)]
+    assert out == ["Someone peeled the orange", "Someone peeled the banana", "Someone sliced the banana",
+                   "The fruit was gathered into the steel bowl", "Someone stirred the salad",
+                   "The bottle was opened and its cap set aside", "Water was poured into the tumbler"]
+    moved = {e["description"]: e.get("order_rule") for e in order_by_rules(events)}
+    assert moved["Someone sliced the banana"] == "the banana is peeled before it is cut"
+    assert stage("A packet was opened") == {}                     # not a bottle: no pouring rule
+    assert stage("chopped the apple and put it into the bowl") == {"food": 2}
+
+
+def test_a_clue_on_one_banana_step_dates_the_next():
+    """Steps naming the same fruit are linked for timing even when they cite different objects."""
+    from app.reason import propagate_order
+    a = {"description": "the banana was sliced", "evidence": [{"object_id": "o1"}], "clock": "narrowed_by_clock",
+         "minutes_before_min": 0, "minutes_before_max": 30}
+    b = {"description": "banana slices went into the bowl", "evidence": [{"object_id": "o5"}],
+         "clock": "no_clock", "minutes_before_min": 0, "minutes_before_max": 120}
+    c = {"description": "the cap was taken off", "evidence": [{"object_id": "o7"}], "clock": "no_clock",
+         "minutes_before_min": 0, "minutes_before_max": 120}
+    propagate_order([a, b, c])
+    assert b["dated"] and b["minutes_before_max"] == 30 and not c["dated"]
+
+
+def test_second_look_adds_a_missed_step(tmp_path):
+    """SAM looks for leftovers; an unused glass that shows a missed pour becomes a checked event."""
+    class Glass(StoryModels):
+        async def sam_segment(self, jpeg, w, h, concept):
+            if concept == "drinking glass":
+                m = np.zeros((h, w), bool)
+                m[60:76, 60:72] = True
+                return [{"object_id": "0", "bbox": [60, 60, 71, 75], "score": 0.9, "mask": m}]
+            return await super().sam_segment(jpeg, w, h, concept)
+
+        async def spark_json(self, prompt, schema, jpeg=None, tag=""):
+            if tag == "second_look":
+                self.tags.append(tag)
+                self.prompts[tag] = prompt
+                return schema.model_validate({"events": [
+                    {"id": "n1", "description": "water was poured into o3", "minutes_before_min": 0,
+                     "minutes_before_max": 30, "evidence": [{"object_id": "o3", "observation": "water in the glass"}]},
+                    {"id": "n2", "description": "made up", "minutes_before_min": 0, "minutes_before_max": 30,
+                     "evidence": [{"object_id": "o1", "observation": "already used"}]}]})
+            if tag == "verify":
+                prompt = prompt.replace("water in the glass", "wrapper torn")      # the fake checker says yes
+            if tag == "summary":
+                return schema.model_validate({"summary": "Someone poured tea and water."})
+            return await super().spark_json(prompt, schema, jpeg, tag)
+
+    models = Glass()
+    res = asyncio.run(run_photo(models, _photo(tmp_path), tmp_path / "out"))
+    assert "o3 (drinking glass)" in models.prompts["second_look"] and "tea was poured" in models.prompts["second_look"]
+    added = [e for e in res["events"] if e.get("source") == "second look"]
+    assert len(added) == 1 and added[0]["evidence"][0]["object_id"] == "o3"      # o1 is not unused: dropped
+    assert res["summary"] == "Someone poured tea and water."                      # the story is retold
