@@ -4,7 +4,7 @@
   "video_seconds": 330,
   "photo_delay_min": [0.8, 1.0],
   "split": "test",
-  "source": "Written from the video frames (one every 3 s) and checked by the person who filmed it, before any Retrodict or baseline run on this photo. Test scene: never used for tuning.",
+  "source": "Written from the video frames (one every 3 s) and checked by the person who filmed it, before any Retrodict or baseline run on this photo. Later wording fix from the filmer's own account: the cap was put aside after pouring (same event, same order). Retrodict was improved after its first run on this scene.",
   "match_note": "Retrodict's events are matched to these by the 'match' patterns (regular expressions on the event text), written here before scoring. 'witness' lists the V-JEPA 2 action kinds that would count as seeing it.",
   "events": [
     {"id": "banana_peel", "what": "red banana trimmed and peeled, peel left on the table", "seconds": [3, 21],
@@ -19,7 +19,7 @@
      "match": "\\b(put|placed|added|transferred|moved|combined|gathered|collected)\\b.*\\bbowl\\b", "witness": ["add_into"]},
     {"id": "mix", "what": "salad mixed with the spoon", "seconds": [273, 300],
      "match": "\\b(mix\\w*|stirr\\w*|stir|toss\\w*)\\b", "witness": ["stir"]},
-    {"id": "bottle_open", "what": "water bottle opened, cap left on the desk", "seconds": [312, 315],
+    {"id": "bottle_open", "what": "water bottle opened; after pouring, the cap was put aside on the desk", "seconds": [312, 327],
      "match": "\\b(cap|lid)\\b.*\\b(off|removed|open\\w*|unscrew\\w*)\\b|\\b(open\\w*|unscrew\\w*|uncapp\\w*)\\b.*\\bbottle\\b", "witness": ["open"]},
     {"id": "pour_water", "what": "water poured from the bottle into the steel glass", "seconds": [315, 324],
      "match": "\\bpour\\w*\\b.*\\b(water|glass|tumbler|cup)\\b|\\b(water)\\b.*\\bpour\\w*", "witness": ["add_into"]}
