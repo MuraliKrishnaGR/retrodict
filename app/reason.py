@@ -82,7 +82,10 @@ def order_is_consistent(events: list) -> bool:
 
 
 def _objects(e: dict) -> set:
-    return {ev["object_id"] for ev in e["evidence"]}
+    """Objects it cites, and the foods it names: steps on the same banana are linked even when each cites
+    a different piece of it (the peel, the slices)."""
+    from app.order import links
+    return links(e)
 
 
 DATED_CLOCKS = {"clock_agrees", "narrowed_by_clock", "replaced_by_clock"}
