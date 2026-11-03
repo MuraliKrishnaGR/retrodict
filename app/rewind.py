@@ -269,7 +269,7 @@ class Rewinder:
         return min(cited, key=lambda oid: (first_mention(oid), cited.index(oid)))
 
     def _before_text(self, step: dict) -> str:
-        name = self.labels.get(step["oid"], "object")
+        name = re.sub(r"\s*\d+$", "", self.labels.get(step["oid"], "object")) or "object"   # "peel 1" -> "peel"
         text = BEFORE.get(step["kind"], BEFORE["mark"]).format(o=name)
         left = [self.labels.get(c, "") for c in step["erase"] if c != step["oid"]]
         if left:

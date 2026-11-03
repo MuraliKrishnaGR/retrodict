@@ -108,6 +108,9 @@ class ProofRewind:
             mask = None
             if e:
                 ids = [ev["object_id"] for ev in e.get("evidence", []) if ev["object_id"] in self.masks]
+                big = 0.15 * self.photo.width * self.photo.height     # a tray or table is the stage, not the clue
+                small = [i for i in ids if self.masks[i].sum() < big]
+                ids = small or ids[:1]
                 if ids:
                     mask = np.zeros_like(self.masks[ids[0]])
                     for i in ids:
@@ -147,7 +150,11 @@ class ProofRewind:
         plan.append(("outro", None, [steps[-1]["key"]["seconds"][0] if steps else 0] * int(OUTRO * FPS)))
         times = {t for _, _, ts in plan for t in ts}
         vid = self._video_frames(times)
-        self.align_to(vid[dur - 0.2])
+        if self.align_to(vid[dur - 0.2]):           # the photo was turned: rebuild the clue outlines on it
+            fresh = {st["key"]["id"]: st["mask"] for st in self.steps()}
+            for _, st, _ in plan:
+                if st is not None:
+                    st["mask"] = fresh[st["key"]["id"]]
         n_steps = len(steps)
         for k, (kind, st, ts) in enumerate(plan):
             for i, t in enumerate(ts):
@@ -187,7 +194,9 @@ class ProofRewind:
         if kind == "step":
             found = st["event"] is not None
             _badge(d, (lx + 10, TOP + 10), "FOUND" if found else "MISSED", GREEN if found else RED, self.f_mid)
-            _badge(d, (rx + 10, TOP + 10), f"◀◀  {mm}:{ss:02d}", (0, 0, 0), self.f_mid)
+            _badge(d, (rx + 10, TOP + 10), f"      {mm}:{ss:02d}", (0, 0, 0), self.f_mid)
+            for x0 in (rx + 20, rx + 32):             # drawn rewind sign: some fonts lack the glyph
+                d.polygon([(x0 + 11, TOP + 18), (x0 + 11, TOP + 36), (x0, TOP + 27)], fill=(255, 255, 255))
             d.text((lx, TOP + PANEL[1] + 24), f"STEP BACK {k} OF {n}", font=self.f_small, fill=ACCENT)
         y = TOP + PANEL[1] + 50
         _text(d, (lx, y), cap, self.f_big, width=W - 32)
