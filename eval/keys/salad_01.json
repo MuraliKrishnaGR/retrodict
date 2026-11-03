@@ -1,0 +1,27 @@
+{
+  "video": "salad_01.mp4",
+  "photos": ["salad_photo.jpg"],
+  "video_seconds": 330,
+  "photo_delay_min": [0.8, 1.0],
+  "split": "test",
+  "source": "Written from the video frames (one every 3 s) and checked by the person who filmed it, before any Retrodict or baseline run on this photo. Test scene: never used for tuning.",
+  "match_note": "Retrodict's events are matched to these by the 'match' patterns (regular expressions on the event text), written here before scoring. 'witness' lists the V-JEPA 2 action kinds that would count as seeing it.",
+  "events": [
+    {"id": "banana_peel", "what": "red banana trimmed and peeled, peel left on the table", "seconds": [3, 21],
+     "match": "\\bbanana\\b.*\\bpeel\\w*|\\bpeel\\w*\\b.*\\bbanana\\b", "witness": ["cut", "open"]},
+    {"id": "banana_slice", "what": "banana sliced into rounds on the board", "seconds": [24, 54],
+     "match": "\\bbanana\\b.*\\b(slic\\w*|cut|chopp\\w*|dic\\w*)\\b|\\b(slic\\w*|cut|chopp\\w*|dic\\w*)\\b.*\\bbanana\\b", "witness": ["cut"]},
+    {"id": "apple_cut", "what": "apple cut into slices, then into small pieces", "seconds": [57, 171],
+     "match": "\\bapple\\b.*\\b(slic\\w*|cut|chopp\\w*|dic\\w*)\\b|\\b(slic\\w*|cut|chopp\\w*|dic\\w*)\\b.*\\bapple\\b", "witness": ["cut"]},
+    {"id": "orange", "what": "orange cut in half, peeled and pulled into segments; peels left", "seconds": [189, 234],
+     "match": "\\b(orange|citrus|mosambi|lime)\\b.*\\b(peel\\w*|cut|segment\\w*|slic\\w*)\\b|\\b(peel\\w*|segment\\w*)\\b.*\\b(orange|citrus|mosambi|lime)\\b", "witness": ["cut", "open"]},
+    {"id": "into_bowl", "what": "cut fruit moved from the board into the bowl", "seconds": [240, 270],
+     "match": "\\b(put|placed|added|transferred|moved|combined|gathered|collected)\\b.*\\bbowl\\b", "witness": ["add_into"]},
+    {"id": "mix", "what": "salad mixed with the spoon", "seconds": [273, 300],
+     "match": "\\b(mix\\w*|stirr\\w*|stir|toss\\w*)\\b", "witness": ["stir"]},
+    {"id": "bottle_open", "what": "water bottle opened, cap left on the desk", "seconds": [312, 315],
+     "match": "\\b(cap|lid)\\b.*\\b(off|removed|open\\w*|unscrew\\w*)\\b|\\b(open\\w*|unscrew\\w*|uncapp\\w*)\\b.*\\bbottle\\b", "witness": ["open"]},
+    {"id": "pour_water", "what": "water poured from the bottle into the steel glass", "seconds": [315, 324],
+     "match": "\\bpour\\w*\\b.*\\b(water|glass|tumbler|cup)\\b|\\b(water)\\b.*\\bpour\\w*", "witness": ["add_into"]}
+  ]
+}

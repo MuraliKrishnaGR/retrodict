@@ -79,3 +79,15 @@ def test_cutting_words_v_jepa_uses():
     assert score.witness_kinds("Poking a hole into [something soft]") == {"cut"}
     assert score.witness_kinds("Bending [something] until it breaks") == {"cut"}
     assert score.witness_kinds("Piling [something] up") == {"add_into"}
+
+
+def test_every_key_is_valid():
+    import re
+    root = Path(__file__).resolve().parent.parent / "eval" / "keys"
+    for p in root.glob("*.json"):
+        key = score.load_key(p)
+        starts = [e["seconds"][0] for e in key["events"]]
+        assert starts == sorted(starts), p.name                       # events listed in the order they happened
+        for e in key["events"]:
+            re.compile(e["match"])
+            assert 0 <= e["seconds"][0] <= e["seconds"][1] <= key["video_seconds"], (p.name, e["id"])
