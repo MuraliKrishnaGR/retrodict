@@ -20,8 +20,21 @@ from app.eraser import erase, removal_mask
 from app.reason import is_dated
 
 FPS = 24
-INTRO, PER_EVENT, OUTRO = 1.2, 1.6, 1.5      # seconds: long enough to read each caption (5 events ~ 10 s)
-BAR_H = 64                                    # caption band at the bottom
+INTRO, PER_EVENT, OUTRO = 2.2, 2.4, 2.0      # seconds: long enough to read each caption
+PER_UNDRAWN = 1.6                             # a step that cannot be drawn changes nothing to watch: shorter
+BAR_H = 104                                   # caption band at the bottom: three lines
+
+# What the scene was like BEFORE the event: the picture goes backward, so the caption must too
+# (2 Nov: captions that described the event while the picture undid it confused the viewer).
+BEFORE = {"remove": "Before: the {o} was not here yet",
+          "move": "Before: the {o} was somewhere else",
+          "empty": "Before: the {o} was empty",
+          "refill": "Before: more was in the {o}",
+          "mark": "Before: the {o} looked different",
+          "add_steam": "Before: the drink in the {o} was steaming"}
+TAG = {"remove": "erased", "move": "erased here", "empty": "drink erased", "refill": "can't be drawn",
+       "mark": "can't be drawn", "add_steam": "steam drawn (illustration)"}
+DRAWN = {"remove", "move", "empty", "add_steam"}
 GHOST = 0.72        # a removed object keeps 28% of itself: honest ("not here yet") and hides inpaint smear
 ACCENT = (255, 196, 0)
 
@@ -181,7 +194,7 @@ class Rewinder:
                 self.masks[o["id"]] = (np.array(Image.open(p)) > 127)[:self.h, :self.w]
         self.labels = {o["id"]: o["label"] for o in self.res["objects"]}
         self.steps = self._steps()
-        self.f_big, self.f_small = font(22), font(15)
+        self.f_big, self.f_small = font(max(24, self.w // 38)), font(max(16, self.w // 60))
 
     def _steps(self) -> list:
         """Latest event first (the photo is 'now'); each step knows its object and how to undo it."""
@@ -231,6 +244,16 @@ class Rewinder:
             return next((i for i, w in enumerate(words) if w in names), len(words))
         return min(cited, key=lambda oid: (first_mention(oid), cited.index(oid)))
 
+    def _before_text(self, step: dict) -> str:
+        name = self.labels.get(step["oid"], "object")
+        text = BEFORE.get(step["kind"], BEFORE["mark"]).format(o=name)
+        left = [self.labels.get(c, "") for c in step["erase"] if c != step["oid"]]
+        if left:
+            text += f", and no {' or '.join(left)}"
+        if step["kind"] not in DRAWN and not left:
+            text += " (can't be drawn)"
+        return text
+
     def states(self) -> list:
         """Image of the scene after undoing 0, 1, ..., N events (steam is drawn at a fixed moment)."""
         cur = self.photo.copy()
@@ -252,7 +275,9 @@ class Rewinder:
                 soft = np.array(Image.fromarray(step["hole"].astype(np.uint8) * 255).filter(ImageFilter.GaussianBlur(3)))
                 k = (soft.astype(np.float32) / 255.0)[..., None] * a * ghost
                 img = img * (1 - k) + step["fill"] * k
-            if step["kind"] in ("remove", "move"):
+            if step["kind"] in ("remove", "move") and step["eraser"] != "lama":
+                # only over a rough fill: a white outline over a realistic LaMa fill reads as a defect
+                # (seen on the milk run: a white squiggle where the spoon was); the pulse marks the place instead
                 edge = outline(m, 2)
                 img[edge] = img[edge] * (1 - 0.45 * a) + np.array([255, 255, 255]) * 0.45 * a   # faint ghost line
         elif step["kind"] == "add_steam":
@@ -296,31 +321,30 @@ class Rewinder:
         over = Image.new("RGBA", frame.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(over)
         d.rectangle([0, self.h - BAR_H, self.w, self.h], fill=(0, 0, 0, 185))
-        if step is None:
-            when, cap = "NOW", "The photo as taken."
+        n = len(self.steps)
+        if step is None and k == 0:
+            top, main, sub = "NOW", "This is the photo.", "Going back one step at a time, latest first."
+        elif step is None:
+            top, main, sub = "AS FAR BACK AS THE CLUES GO", "The earliest moment the photo points to.", ""
         else:
             e = step["event"]
-            when, cap = when_text(e), short(e["description"])
-            note = {"add_steam": "steam drawn as an illustration",
-                    "refill": "some was used, eaten or drunk (not drawn)",
-                    "move": "was somewhere else before (erased here)",
-                    "empty": "not poured yet (drink erased)",
-                    "mark": "this changed (not drawn)",
-                    "remove": "not here yet (erased)"}.get(step["kind"])
-            if note:
+            top = f"STEP BACK {k} OF {n}" + (f"  ·  {when_text(e).upper()}" if is_dated(e) else "")
+            main = self._before_text(step)
+            sub = "Because: " + short(e["description"], 90)[:1].lower() + short(e["description"], 90)[1:]
+            tag = TAG.get(step["kind"])
+            if tag:
                 m = self.masks[step["oid"]]
                 ys, xs = np.nonzero(m)
-                y = int(ys.min()) - 26
+                y = int(ys.min()) - 30
                 y = y if y >= 44 else max(44, int(ys.min()) + 10)   # keep clear of the top badges and scrubber
-                tw = d.textlength(note, font=self.f_small)
+                tw = d.textlength(tag, font=self.f_small)
                 x = int(min(max(6, int(xs.min())), self.w - tw - 14))   # never off the right edge
-                _label(d, (x, y), note, self.f_small, fill=ACCENT)
-        d.text((14, self.h - BAR_H + 8), when.upper(), font=self.f_small, fill=ACCENT)
-        lines = _wrap(d, cap, self.f_big if len(cap) < 70 else self.f_small, self.w - 28)
-        fc = self.f_big if len(cap) < 70 else self.f_small
-        for i, line in enumerate(lines):
-            d.text((14, self.h - BAR_H + 28 + i * (fc.size + 2) - (6 if len(lines) > 1 else 0)), line, font=fc,
-                   fill=(255, 255, 255))
+                _label(d, (x, y), tag, self.f_small, fill=ACCENT)
+        y0 = self.h - BAR_H
+        d.text((16, y0 + 10), top, font=self.f_small, fill=ACCENT)
+        d.text((16, y0 + 32), _wrap(d, main, self.f_big, self.w - 32)[0], font=self.f_big, fill=(255, 255, 255))
+        if sub:
+            d.text((16, y0 + 70), _wrap(d, sub, self.f_small, self.w - 32)[0], font=self.f_small, fill=(200, 200, 200))
         _label(d, (38, 10), "REWIND  -  best guess from the photo, not proof", self.f_small)
         for x0 in (8, 17):                       # a drawn rewind sign: fonts on some computers lack the glyph
             d.polygon([(x0 + 9, 12), (x0 + 9, 26), (x0, 19)], fill=ACCENT)
@@ -348,7 +372,8 @@ class Rewinder:
         for i in range(int(INTRO * FPS)):
             yield self._decorate(cur, None, 0, 0, 0)
         for k, step in enumerate(self.steps):
-            frames = int(PER_EVENT * FPS)
+            drawn = step["kind"] in DRAWN or len(step["erase"]) > 0
+            frames = int((PER_EVENT if drawn else PER_UNDRAWN) * FPS)
             for i in range(frames):
                 p = i / (frames - 1)
                 a = min(1.0, max(0.0, (p - 0.25) / 0.5))              # highlight first, then undo
@@ -361,10 +386,9 @@ class Rewinder:
                 steaming.append(step)
             else:
                 cur = self._apply(cur, step, 1.0, t=0.0)
-        last = self.steps[-1] if self.steps else None
         for i in range(int(OUTRO * FPS)):
             t = INTRO + n * PER_EVENT + i / FPS
-            yield self._decorate(with_steam(cur, t), last, n, 0, 1.0 if n else 0)
+            yield self._decorate(with_steam(cur, t), None, n + 1, 0, 1.0 if n else 0)
 
     def write(self) -> dict:
         import imageio.v2 as imageio

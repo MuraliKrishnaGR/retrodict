@@ -55,7 +55,17 @@ def test_video_and_stills_are_written(tmp_path):
     assert (d / "rewind.mp4").stat().st_size > 1000
     assert info["stills"] == ["rewind_0.jpg", "rewind_1.jpg", "rewind_2.jpg"]
     assert [s["kind"] for s in info["steps"]] == ["refill", "remove"]   # latest event is undone first
-    assert 5.4 < info["seconds"] < 6.4                                   # intro + 2 events + outro
+    assert 7.7 < info["seconds"] < 8.6       # intro + a drawn step + a shorter undrawable one + outro
+
+
+def test_captions_say_what_it_was_like_before(tmp_path):
+    """The picture goes backward, so the caption must too (2 Nov: event captions over a reversing picture
+    confused the viewer)."""
+    d = _run_dir(tmp_path, [_ev("e1", "o1", "remove"), _ev("e2", "o2", "refill")])
+    r = Rewinder(d)
+    texts = [r._before_text(s) for s in r.steps]
+    assert texts[0].startswith("Before: more was in the") and texts[0].endswith("(can't be drawn)")
+    assert texts[1].startswith("Before: the") and texts[1].endswith("was not here yet")
 
 
 def test_events_without_a_mask_are_skipped(tmp_path):

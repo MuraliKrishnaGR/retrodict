@@ -17,7 +17,9 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(ROOT / ".env")
-SPACE = os.getenv("IMAGE_EDIT_SPACE", "multimodalart/Qwen-Image-Edit-Fast")
+# Tried in order until one works (Spaces get paused or busy). Override with IMAGE_EDIT_SPACE in .env.
+SPACES = [os.getenv("IMAGE_EDIT_SPACE")] if os.getenv("IMAGE_EDIT_SPACE") else \
+    ["multimodalart/Qwen-Image-Edit-Fast", "Qwen/Qwen-Image-Edit"]
 PROMPT = ("Make the steel glass empty: remove only the milk inside it, so the bare inside of the glass shows. "
           "Keep everything else exactly the same: camera, light, the glass itself and every other object.")
 
@@ -49,51 +51,85 @@ def first_image_path(result):
     return None
 
 
-def main():
+def small_copy(photo: Path) -> Path:
+    """At most 1024 px on the long side: what these Spaces are built for, and less GPU time."""
+    from PIL import Image
+    im = Image.open(photo).convert("RGB")
+    im.thumbnail((1024, 1024))
+    out = ROOT / "out" / "edit_input.jpg"
+    out.parent.mkdir(exist_ok=True)
+    im.save(out, quality=92)
+    return out
+
+
+def error_text(e: Exception) -> str:
+    """Gradio often hides the real reason; show everything it gives."""
+    parts = [type(e).__name__, str(e)] + [str(a) for a in getattr(e, "args", ())]
+    return " | ".join(dict.fromkeys(p for p in parts if p))[:600]
+
+
+def try_space(space, token, photo):
+    from gradio_client import Client, handle_file
     try:
-        from gradio_client import Client, handle_file
-    except ImportError:
-        raise SystemExit("Install it first: pip install gradio_client")
-    token = os.getenv("HF_TOKEN") or None
-    try:
-        client = Client(SPACE, token=token, verbose=False)
+        client = Client(space, token=token, verbose=False)
         api = client.view_api(print_info=False, return_format="dict")
     except Exception as e:
-        raise SystemExit(f"[FAIL] 1 connect to {SPACE}: {type(e).__name__}: {str(e)[:300]}\n"
-                         "       fix: the Space may be paused or busy; try again later or set IMAGE_EDIT_SPACE in .env")
+        print(f"[FAIL] connect to {space}: {error_text(e)}")
+        return None
     name, ep = find_endpoint(api)
     if not name:
-        raise SystemExit(f"[FAIL] 1 {SPACE} has no image + text endpoint. Endpoints: {list((api.get('named_endpoints') or {}))}")
+        print(f"[FAIL] {space} has no image + text endpoint: {list((api.get('named_endpoints') or {}))}")
+        return None
     params = [(p.get("parameter_name"), p.get("component"), p.get("parameter_has_default")) for p in ep["parameters"]]
-    print(f"[PASS] 1 connected to {SPACE} ({'with your token' if token else 'anonymous'}); endpoint {name}")
+    print(f"[PASS] connected to {space} ({'with your token' if token else 'anonymous'}); endpoint {name}")
     for p in params:
         print(f"       {p[0]} ({p[1]}){'' if p[2] else '  required'}")
-    if len(sys.argv) < 2:
-        print("Next (one edit, ~10 s of free GPU): python scripts/check_image_edit.py path\\to\\photo.jpeg")
-        return
-
-    photo = Path(sys.argv[1])
+    if photo is None:
+        return "listed"
     kwargs, text_done = {}, False
     for pname, comp, has_default in params:
         if "Image" in comp or "Gallery" in comp:
             kwargs[pname] = [handle_file(str(photo))] if "Gallery" in comp else handle_file(str(photo))
         elif "Textbox" in comp and not text_done:
             kwargs[pname], text_done = PROMPT, True
+        elif pname == "rewrite_prompt":
+            kwargs[pname] = False            # rewriting calls another model inside the Space; keep our exact words
         elif not has_default:
-            raise SystemExit(f"[FAIL] 2 the Space needs {pname} ({comp}); send me the list printed above")
+            print(f"[FAIL] {space} needs {pname} ({comp}); send me this output")
+            return None
     try:
         result = client.predict(api_name=name, **kwargs)
     except Exception as e:
-        raise SystemExit(f"[FAIL] 2 edit: {type(e).__name__}: {str(e)[:400]}\n"
-                         "       fix: a quota message means the free GPU minutes for today are used up")
+        print(f"[FAIL] edit on {space}: {error_text(e)}")
+        return None
     path = first_image_path(result)
     if not path:
-        raise SystemExit(f"[FAIL] 2 unexpected result: {str(result)[:300]}")
-    out = ROOT / "out" / "edit_check.png"
-    out.parent.mkdir(exist_ok=True)
-    from PIL import Image
-    Image.open(path).convert("RGB").save(out)
-    print(f"[PASS] 2 edit works. Saved {out}")
+        print(f"[FAIL] {space} returned something unexpected: {str(result)[:300]}")
+        return None
+    return path
+
+
+def main():
+    try:
+        import gradio_client  # noqa: F401
+    except ImportError:
+        raise SystemExit("Install it first: pip install gradio_client")
+    token = os.getenv("HF_TOKEN") or None
+    photo = small_copy(Path(sys.argv[1])) if len(sys.argv) > 1 else None
+    for space in SPACES:
+        path = try_space(space, token, photo)
+        if path == "listed":
+            print("Next (one edit, ~10 s of free GPU): python scripts/check_image_edit.py path\\to\\photo.jpeg")
+            return
+        if path:
+            from PIL import Image
+            out = ROOT / "out" / "edit_check.png"
+            Image.open(path).convert("RGB").save(out)
+            print(f"[PASS] edit works on {space}. Saved {out}")
+            return
+    print("No free editor worked." + ("" if token else
+          " You are anonymous, which gets the smallest free GPU share (sometimes none): make a free Hugging Face"
+          " account, create a Read token, run python scripts/set_hf_token.py, then try again."))
 
 
 if __name__ == "__main__":
