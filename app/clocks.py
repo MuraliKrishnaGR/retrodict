@@ -25,6 +25,10 @@ CLOCKS = {
     "wet_ring":          Clock(0, 45, "a wet ring under a cup has not dried yet"),
     "dry_ring_stain":    Clock(30, 1440, "a dried ring means the liquid sat long enough to dry"),
     "damp_cloth":        Clock(0, 180, "a damp cloth dries over a few hours"),
+    # enzymatic browning: cut apple, banana, pear or potato flesh turns visibly brown in air within roughly
+    # 15 to 30 minutes at room temperature (faster for banana); still pale means cut recently
+    "fresh_cut":         Clock(0, 30, "cut apple or banana flesh turns brown in air within about half an hour"),
+    "browned_cut":       Clock(15, 480, "cut fruit flesh gone brown has been exposed to air for a while"),
 }
 
 NO_CLOCK = {"crumbs", "open_package", "partially_eaten", "lid_off", "utensil_used",
@@ -52,6 +56,9 @@ LOOKS = {
     "door_or_drawer_open": "a door or drawer left open",
     "displaced_furniture": "a chair or furniture pushed out of its usual place",
     "residue":           "drips, film or leftovers inside or on a container after its contents were poured or used",
+    "fresh_cut":         "cut surfaces of apple, banana, pear or potato still pale, white or cream and moist, with NO "
+                         "brown tint (citrus, cucumber and melon do not brown: they do not count)",
+    "browned_cut":       "cut surfaces of apple, banana, pear or potato visibly brown or tan, dried at the edges",
     "level_dropped":     "a wet film or band on the INSIDE wall of a cup ABOVE the current drink level, all the way "
                          "round: it was fuller before, so some was drunk or poured out (a few scattered drops are "
                          "splashes from pouring, not this)",
