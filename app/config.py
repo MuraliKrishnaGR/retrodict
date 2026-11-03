@@ -12,6 +12,7 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://inference.baseten.co/v1")
 LLM_MODEL = os.getenv("LLM_MODEL", "meta-models/muse-spark-open")
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "8000"))       # reasoning tokens count toward this
 LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "")     # e.g. "low"; empty = provider default
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))          # free tiers rate-limit: retry with back-off
 
 # SAM 3.1 open weights, run locally with transformers
 SAM_MODEL_ID = os.getenv("SAM_MODEL_ID", "unsloth/sam3.1")

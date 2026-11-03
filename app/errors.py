@@ -31,6 +31,8 @@ def explain(err: Exception) -> str:
         return "Model not found. Check LLM_MODEL in .env or run: python scripts/find_model.py."
     if code == 429 or name == "RateLimitError":
         return "Rate limit. Wait a minute and run again (finished steps are cached, not paid twice)."
+    if "terms acceptance" in low or "model_terms_required" in low:
+        return "The host needs you to accept this model's terms once: open the link in the message above, accept, run again."
     if code == 400 or name == "BadRequestError":
         return "The model host rejected the request format. " + _details(err)
     if name in ("APIConnectionError", "APITimeoutError", "ConnectError", "TimeoutError"):

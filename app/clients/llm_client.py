@@ -35,8 +35,13 @@ class LLMClient:
     def __init__(self, client=None, cache: DiskCache | None = None, ledger: SpendLedger | None = None):
         if client is None:
             from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=config.api_key(), base_url=config.LLM_BASE_URL,
-                                 max_retries=2, timeout=300)
+            key = config.api_key()
+            headers = {}
+            if "." in key and key.startswith("wk-"):     # a Modal proxy token "ID.secret": also send Modal's headers
+                tid, tsec = key.split(".", 1)
+                headers = {"Modal-Key": tid, "Modal-Secret": tsec}
+            client = AsyncOpenAI(api_key=key, base_url=config.LLM_BASE_URL, default_headers=headers or None,
+                                 max_retries=config.LLM_MAX_RETRIES, timeout=300)
         self.client = client
         self.cache = cache or DiskCache(config.CACHE_DIR)
         self.ledger = ledger or SpendLedger(config.CACHE_DIR / "spend.json",
