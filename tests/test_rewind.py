@@ -59,7 +59,7 @@ def test_video_and_stills_are_written(tmp_path):
     assert (d / "rewind.mp4").stat().st_size > 1000
     assert info["stills"] == ["rewind_0.jpg", "rewind_1.jpg", "rewind_2.jpg"]
     assert [s["kind"] for s in info["steps"]] == ["refill", "remove"]   # latest event is undone first
-    assert 7.7 < info["seconds"] < 8.6       # intro + a drawn step + a shorter undrawable one + outro
+    assert 8.5 < info["seconds"] < 9.5       # intro + two spotlight steps + outro
 
 
 def test_captions_say_what_it_was_like_before(tmp_path):

@@ -454,19 +454,111 @@ class Rewinder:
             t = INTRO + n * PER_EVENT + i / FPS
             yield self._decorate(with_steam(cur, t), None, n + 1, 0, 1.0 if n else 0)
 
+    # ---- spotlight rewind (default): the photo is never edited. Each step back, the view glides to the
+    # clue that step rests on, the rest dims, the clue glows, and the caption says what it was like before.
+    # (3 Nov: erasing objects with a fill "looks like a cheap edit".)
+    def _clue_mask(self, step: dict) -> np.ndarray:
+        e = step["event"]
+        big = 0.15 * self.w * self.h                              # a tray or table is the stage, not the clue
+        ids = [ev["object_id"] for ev in e.get("evidence", []) if ev["object_id"] in self.masks]
+        ids = [i for i in dict.fromkeys(ids) if self.masks[i].sum() < big] or [step["oid"]]
+        m = np.zeros((self.h, self.w), bool)
+        for i in ids:
+            m |= self.masks[i]
+        return m
+
+    def _view(self, mask) -> tuple:
+        """(x0, y0, x1, y1) around the clue, same shape as the photo, at least 40% of its width."""
+        if mask is None or not mask.any():
+            return (0.0, 0.0, float(self.w), float(self.h))
+        ys, xs = np.nonzero(mask)
+        cx, cy = (xs.min() + xs.max()) / 2, (ys.min() + ys.max()) / 2
+        vw = max((xs.max() - xs.min()) * 2.0, (ys.max() - ys.min()) * 2.0 * self.w / self.h, self.w * 0.4)
+        vw = min(vw, self.w)
+        vh = vw * self.h / self.w
+        x0 = min(max(0.0, cx - vw / 2), self.w - vw)
+        y0 = min(max(0.0, cy - vh / 2), self.h - vh)
+        return (x0, y0, x0 + vw, y0 + vh)
+
+    def _spot_frame(self, view, mask, light: float, step, k: int, n: int) -> Image.Image:
+        """The photo seen through `view`; outside `mask` dimmed by `light` (0..1), the clue outlined."""
+        img = self.photo.astype(np.float32)
+        if mask is not None and mask.any() and light > 0:
+            key = id(mask)
+            if getattr(self, "_spot_key", None) != key:          # once per step, not once per frame
+                self._spot_key = key
+                self._spot_soft = np.asarray(Image.fromarray(mask.astype(np.uint8) * 255).filter(ImageFilter.MaxFilter(9))
+                                             .filter(ImageFilter.GaussianBlur(6)), np.float32)[..., None] / 255
+                self._spot_edge = outline(mask, 3)
+            img = img * (1 - 0.62 * light * (1 - self._spot_soft))
+            edge = self._spot_edge
+            img[edge] = img[edge] * (1 - light) + np.array(ACCENT) * light
+        x0, y0, x1, y1 = view
+        frame = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).crop(
+            (int(x0), int(y0), int(round(x1)), int(round(y1)))).resize((self.w, self.h), Image.LANCZOS)
+        frame = frame.convert("RGBA")
+        over = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(over)
+        d.rectangle([0, self.h - BAR_H, self.w, self.h], fill=(0, 0, 0, 185))
+        if step is None:
+            top, main, sub = ("NOW", "This is the photo.", "Going back one step at a time, latest first.") if k == 0 \
+                else ("AS FAR BACK AS THE CLUES GO", "That is what the photo says happened.", "")
+        else:
+            e = step["event"]
+            top = f"STEP BACK {k} OF {n}" + (f"  ·  {when_text(e).upper()}" if is_dated(e) else "")
+            main = self._before_text(step).replace(" (can't be drawn)", "")
+            sub = "Because: " + short(e["description"], 90)[:1].lower() + short(e["description"], 90)[1:]
+        y0b = self.h - BAR_H
+        d.text((16, y0b + 10), top, font=self.f_small, fill=ACCENT)
+        d.text((16, y0b + 32), _wrap(d, main, self.f_big, self.w - 32)[0], font=self.f_big, fill=(255, 255, 255))
+        if sub:
+            d.text((16, y0b + 70), _wrap(d, sub, self.f_small, self.w - 32)[0], font=self.f_small, fill=(200, 200, 200))
+        _label(d, (38, 10), "REWIND  -  best guess from the photo, not proof", self.f_small)
+        for x in (8, 17):
+            d.polygon([(x + 9, 12), (x + 9, 26), (x, 19)], fill=ACCENT)
+        return Image.alpha_composite(frame, over).convert("RGB")
+
+    def spotlight_frames(self, stills: list = None):
+        n = len(self.steps)
+        full = (0.0, 0.0, float(self.w), float(self.h))
+        lerp = lambda a, b, t: tuple(x + (y - x) * t for x, y in zip(a, b))
+        for _ in range(int(INTRO * FPS)):
+            yield self._spot_frame(full, None, 0, None, 0, n)
+        view, prev_mask = full, None
+        for k, step in enumerate(self.steps, 1):
+            mask = self._clue_mask(step)
+            target = self._view(mask)
+            frames = int(PER_EVENT * FPS)
+            for i in range(frames):
+                p = i / (frames - 1)
+                move = ease(min(1.0, p / 0.4))
+                v = lerp(view, target, move)
+                push = 0.03 * max(0.0, (p - 0.4) / 0.6)              # a slow push-in while holding
+                cx, cy, hw, hh = (v[0] + v[2]) / 2, (v[1] + v[3]) / 2, (v[2] - v[0]) / 2 * (1 - push), (v[3] - v[1]) / 2 * (1 - push)
+                light = ease(min(1.0, p / 0.35))
+                fr = self._spot_frame((cx - hw, cy - hh, cx + hw, cy + hh), mask, light, step, k, n)
+                if stills is not None and i == int(frames * 0.7):
+                    stills.append(fr)
+                yield fr
+            view = target
+        for i in range(int(OUTRO * FPS)):
+            p = ease(min(1.0, i / (OUTRO * FPS * 0.5)))
+            yield self._spot_frame(lerp(view, full, p), None, 0, None, n + 1, n)
+
     def write(self) -> dict:
         import imageio.v2 as imageio
         out = self.dir / "rewind.mp4"
+        held = []
         with imageio.get_writer(out, fps=FPS, codec="libx264", quality=8, macro_block_size=2,
                                 pixelformat="yuv420p", ffmpeg_params=["-preset", "veryfast"]) as wr:
             count = 0
-            for fr in self.frames():
+            for fr in self.spotlight_frames(held):
                 wr.append_data(np.asarray(fr))
                 count += 1
         stills = []
-        for i, s in enumerate(self.states()):
+        for i, s in enumerate([Image.fromarray(self.photo)] + held):
             p = self.dir / f"rewind_{i}.jpg"
-            Image.fromarray(s).save(p, quality=90)
+            s.save(p, quality=90)
             stills.append(p.name)
         return {"video": out.name, "frames": count, "seconds": round(count / FPS, 2), "stills": stills,
                 "steps": [{"event_id": s["event"]["id"], "object_id": s["oid"], "kind": s["kind"]}
