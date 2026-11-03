@@ -31,6 +31,7 @@ TRACE_NAMES = {
     "wet_spill", "wet_ring", "dry_ring_stain", "damp_cloth",
     "crumbs", "open_package", "partially_eaten", "lid_off", "utensil_used",
     "door_or_drawer_open", "displaced_furniture", "residue", "level_dropped",
+    "fresh_cut", "browned_cut",
 }
 
 
@@ -51,6 +52,7 @@ def _norm_trace(t):
 
 class ObjectState(BaseModel):
     object_id: str
+    name: str = ""                                   # e.g. "banana peel": the specific everyday name
     what: str = ""                                   # e.g. "white ceramic mug"
     observations: list[str] = []                     # only what is visible now
     traces: list[str] = []                           # only names from TRACE_NAMES are kept

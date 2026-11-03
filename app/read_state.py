@@ -1,5 +1,6 @@
 """Pipeline step 2: read each object's CURRENT state from its own full-resolution close-up."""
 import asyncio
+import re
 
 from app.clocks import traces_guide
 from app.schemas import ObjectState
@@ -16,6 +17,9 @@ context only: {others}. You are a careful investigator: describe {oid} only, and
 Do not guess what happened.
 
 Give:
+- "name": 1 to 3 words, the specific everyday name of what {oid} is, as a person would say it: "banana
+  peel", "orange peel", "apple pieces", "steel tumbler", "bottle cap", "fruit bowl". Never a vague one
+  ("peel", "object", "item", "lid") when the close-up shows which kind it is.
 - "what": a short description that tells it apart (colour, material, lid, contents).
 - "observations": 2 to 5 short visible facts (fill level, open or closed, wet or dry, steam, crumbs,
   wrapper torn, position, residue). Write "unclear" rather than guess. For a cup, glass or pot, always
@@ -28,7 +32,7 @@ Give:
   defined by what it looks like; only use a name when the crop really shows that:
 {traces}
 - "confidence": 0 to 1, how clearly the crop shows its state.
-Return ONLY JSON: {{"object_id": "{oid}", "what": "...", "observations": ["..."], "traces": [], "confidence": 0.8}}"""
+Return ONLY JSON: {{"object_id": "{oid}", "name": "...", "what": "...", "observations": ["..."], "traces": [], "confidence": 0.8}}"""
 
 
 async def read_state(models, objects: list, image_for) -> dict:
@@ -51,3 +55,31 @@ async def read_state(models, objects: list, image_for) -> dict:
         states[o["id"]] = st or {"object_id": o["id"], "what": o["label"], "observations": ["unclear"],
                                  "traces": [], "confidence": 0.0}
     return states
+
+
+VAGUE = {"object", "item", "thing", "stuff", "unclear", "unknown", "something"}
+
+
+def name_objects(objects: list, states: dict, drawn: list = ()) -> dict:
+    """Give each object the specific name its own close-up showed ("peel 3" becomes "orange peel"), numbered
+    only when several share it. The first name is kept as 'first_label'. Returns {id: new label}."""
+    names = {}
+    for o in objects:
+        n = " ".join(str(states.get(o["id"], {}).get("name") or "").lower().replace("_", " ").split())[:30]
+        names[o["id"]] = n if n and n not in VAGUE and not re.fullmatch(r"o\d+", n) else ""
+    counts, seen, out = {}, {}, {}
+    for oid, n in names.items():
+        if n:
+            counts[n] = counts.get(n, 0) + 1
+    for o in objects:
+        n = names[o["id"]]
+        if not n:
+            continue
+        seen[n] = seen.get(n, 0) + 1
+        label = n if counts[n] == 1 else f"{n} {seen[n]}"
+        o.setdefault("first_label", o["label"])
+        o["label"] = out[o["id"]] = label
+    for d in drawn:
+        if d["id"] in out:
+            d["label"] = out[d["id"]]
+    return out
