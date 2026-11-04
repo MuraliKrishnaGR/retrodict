@@ -49,12 +49,16 @@ def font(size: int):
 
 
 def when_text(e: dict) -> str:
-    """Times come only from clues in the photo; without one the model's guess is not shown as a time."""
+    """A time proven by a clue in the photo, or else the model's reasoned estimate, always labelled as one."""
     lo, hi = e["minutes_before_min"], e["minutes_before_max"]
 
     def fmt(m):
         return f"{m:g} min" if m < 120 else f"{m / 60:.1f} h"
     if not is_dated(e):
+        if e.get("estimate"):
+            a, b = e["estimate"]
+            return f"about {fmt(b)} before (estimate)" if a == b else (
+                f"estimated up to {fmt(b)} before" if a == 0 else f"estimated {a:g} to {fmt(b)} before")
         return f"at least {fmt(lo)} before" if lo > 0 else "time unknown"
     if lo == 0:
         return f"up to {fmt(hi)} before"
@@ -391,7 +395,7 @@ class Rewinder:
             top, main, sub = "AS FAR BACK AS THE CLUES GO", "The earliest moment the photo points to.", ""
         else:
             e = step["event"]
-            top = f"STEP BACK {k} OF {n}" + (f"  ·  {when_text(e).upper()}" if is_dated(e) else "")
+            top = f"STEP BACK {k} OF {n}" + (f"  ·  {when_text(e).upper()}" if is_dated(e) or e.get("estimate") else "")
             main = self._before_text(step)
             sub = "Because: " + short(e["description"], 90)[:1].lower() + short(e["description"], 90)[1:]
             tag = TAG.get(step["kind"])
@@ -505,7 +509,7 @@ class Rewinder:
                 else ("AS FAR BACK AS THE CLUES GO", "That is what the photo says happened.", "")
         else:
             e = step["event"]
-            top = f"STEP BACK {k} OF {n}" + (f"  ·  {when_text(e).upper()}" if is_dated(e) else "")
+            top = f"STEP BACK {k} OF {n}" + (f"  ·  {when_text(e).upper()}" if is_dated(e) or e.get("estimate") else "")
             main = self._before_text(step).replace(" (can't be drawn)", "")
             sub = "Because: " + short(e["description"], 90)[:1].lower() + short(e["description"], 90)[1:]
         y0b = self.h - BAR_H
