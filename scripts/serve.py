@@ -2,6 +2,7 @@
 
   python scripts/serve.py          -> open http://127.0.0.1:8000
   python scripts/serve.py --lan    -> also open it from a phone on the same Wi-Fi (http://<this PC's IP>:8000)
+  python scripts/serve.py --example -> browse the finished salad run in examples/ (no key, no model calls)
 """
 import socket
 import sys
@@ -24,6 +25,9 @@ def lan_ip() -> str:
 
 
 if __name__ == "__main__":
+    if "--example" in sys.argv:                     # the committed salad run, read only
+        from app import config
+        config.OUT_DIR = config.ROOT / "examples"
     lan = "--lan" in sys.argv
     host = "0.0.0.0" if lan else "127.0.0.1"
     print("Retrodict: http://127.0.0.1:8000" + (f"  (phone on the same Wi-Fi: http://{lan_ip()}:8000)" if lan else ""))
