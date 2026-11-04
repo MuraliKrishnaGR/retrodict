@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-# Muse Spark Open through any OpenAI-compatible host (Baseten by default)
+# Muse Spark Open through any OpenAI-compatible host (Baseten by default; see scripts/use_host.py)
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://inference.baseten.co/v1")
 LLM_MODEL = os.getenv("LLM_MODEL", "meta-models/muse-spark-open")
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "8000"))       # reasoning tokens count toward this
@@ -35,5 +35,5 @@ PRICE_LLM_OUT_PER_M = float(os.getenv("PRICE_LLM_OUT_PER_M", "4.25"))
 def api_key() -> str:
     key = (os.getenv("LLM_API_KEY") or os.getenv("BASETEN_API_KEY") or "").strip()
     if not key or key == "paste_your_key_here":
-        raise SystemExit("LLM_API_KEY is missing. Run: python scripts/set_key.py")
+        raise SystemExit("LLM_API_KEY is missing. Run: python scripts/use_host.py <host>  (baseten, openrouter, together, fireworks or modal)")
     return key
