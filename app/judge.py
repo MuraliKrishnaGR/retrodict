@@ -22,7 +22,13 @@ For each claim, list the ids of the real events it correctly describes. Rules:
 - A vague claim ("fruit was cut") covers a specific real event only if that fruit is named or the claim
   clearly includes every fruit ("all the fruit").
 - Leftovers or states ("knife left on the board") cover nothing unless they state one of the real actions.
-- Mark a claim as wrong if it states something that contradicts the real events or did not happen.
+- Mark a claim as wrong only if it CLEARLY contradicts the real events: a different fruit or object, an
+  action that did not happen, or an order the real events rule out. The real events are short notes, not
+  everything that happened: a detail they do not mention (a shape such as "rounds" or "cubes", where
+  something was put down, how it was cut) is not a contradiction. "Desk", "table" and "tray" are the same
+  surface. A wrong colour or kind of an object that is otherwise right ("green apple" for a red one) is
+  wrong. A claim that names the thing by how it looks with options that include the right one ("brown
+  powder, most likely coffee or sugar") is not wrong and covers the event.
 Return JSON only:
 {{"claims": [{{"claim": "A", "covers": ["event_id", ...], "wrong": false, "note": "one short reason"}}]}}"""
 
