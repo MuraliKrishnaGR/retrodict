@@ -22,11 +22,11 @@ def explain(err: Exception) -> str:
     if name == "BudgetExceeded":
         return "Spend guard stopped the call. Raise MAX_RUN_USD / MAX_SPEND_USD in .env only if you mean to."
     if code == 401 or name == "AuthenticationError":
-        return "Key rejected. Run: python scripts/set_key.py and paste the full Baseten API key again."
+        return "Key rejected. Run: python scripts/use_host.py <host> and paste the full API key again."
     if code == 402 or "billing" in low or "payment" in low or "credit" in low or "insufficient" in low:
-        return "Billing problem on the LLM host. Check that your Baseten credits are active."
+        return "Billing problem on the LLM host: check that your credits or billing are active there."
     if code == 403 or name == "PermissionDeniedError":
-        return "Access denied. The model may not be enabled for your account yet. Ask in the Baseten Discord channel."
+        return "Access denied. The model may not be enabled for your account on this host yet."
     if code == 404 or name == "NotFoundError":
         return "Model not found. Check LLM_MODEL in .env or run: python scripts/find_model.py."
     if code == 429 or name == "RateLimitError":
