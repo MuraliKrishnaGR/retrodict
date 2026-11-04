@@ -36,6 +36,8 @@ button, .btn { font: inherit; }
 .brand h1 { font-size: 34px; letter-spacing: -0.02em; line-height: 1; }
 .brand p { margin: 6px 0 0; color: var(--muted); }
 .actions { display: flex; gap: 10px; }
+.static-note { margin: 0; color: var(--muted); font-size: 14px; }
+.static-note a { color: inherit; }
 .btn { display: inline-block; padding: 10px 16px; border: 1.5px solid var(--ink); border-radius: 999px;
        cursor: pointer; background: transparent; color: var(--ink); }
 .btn.primary { background: var(--ink); color: var(--paper); }
@@ -93,6 +95,7 @@ main { padding: 0 32px 48px; }
 .band.partly { opacity: .55; }
 .band.contested { background: repeating-linear-gradient(135deg, var(--no) 0 6px, transparent 6px 10px);
                   outline: 1.5px solid var(--no); }
+.band.estimate { background: transparent; box-shadow: inset 0 0 0 2px var(--range); opacity: .8; }
 .band.clocked { box-shadow: inset 0 0 0 2px var(--ink); }
 .axis { position: relative; margin: 0 22px 0 calc(26% + 14px); height: 28px; border-top: 1.5px solid var(--ink); }
 .tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 13px; color: var(--muted);
