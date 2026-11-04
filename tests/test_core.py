@@ -207,7 +207,7 @@ def test_set_key_replaces_only_key_line():
 def test_error_hints():
     from app.errors import explain
     e = Exception("bad"); e.status_code = 401
-    assert "set_key" in explain(e)
+    assert "use_host" in explain(e)
     e2 = Exception("model x not found"); e2.status_code = 404
     assert "find_model" in explain(e2)
 
