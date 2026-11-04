@@ -1,0 +1,27 @@
+{
+  "video": "milk_v2.mp4",
+  "photos": ["milk_v2.jpeg"],
+  "video_seconds": 75,
+  "photo_delay_min": [0.1, 1.0],
+  "split": "test",
+  "source": "Written from the video frames (one every 2 s) and the filmer's account, before any Retrodict or baseline run on this photo. Nothing in Retrodict was changed for this scene before it ran. The dipped biscuit was eaten at the very end, partly off camera; the photo was taken right after recording stopped.",
+  "match_note": "The blind judge decides matches; 'match' patterns are the fallback, written here before scoring.",
+  "events": [
+    {"id": "milk_pour", "what": "hot milk poured from the pan into the steel tumbler (pan held with the gripper)", "seconds": [7, 13],
+     "match": "\\bmilk\\b.*\\bpour\\w*|\\bpour\\w*\\b.*\\bmilk\\b", "witness": ["add_into"]},
+    {"id": "jar_open", "what": "coffee jar opened, its lid put down upside down beside it", "seconds": [17, 22],
+     "match": "\\b(jar|lid|cap)\\b.*\\b(open\\w*|off|removed|aside)\\b|\\bopen\\w*\\b.*\\bjar\\b", "witness": ["open"]},
+    {"id": "coffee_add", "what": "coffee powder scooped from the jar into the milk; the scoop left standing in the jar", "seconds": [22, 30],
+     "match": "\\b(coffee|powder)\\b.*\\b(add\\w*|scoop\\w*|spoon\\w*|put)\\b|\\b(add\\w*|scoop\\w*)\\b.*\\b(coffee|powder)\\b", "witness": ["add_into"]},
+    {"id": "stir", "what": "coffee stirred with the steel spoon", "seconds": [30, 42],
+     "match": "\\b(stirr?\\w*|mix\\w*)\\b", "witness": ["stir"]},
+    {"id": "spill", "what": "some milk spilled on the counter beside the tumbler while stirring", "seconds": [38, 44],
+     "match": "\\b(spill\\w*|drip\\w*|splash\\w*)\\b", "witness": []},
+    {"id": "packet_open", "what": "biscuit packet torn open", "seconds": [50, 58],
+     "match": "\\b(packet|wrapper|pack)\\b.*\\b(open\\w*|torn|tore|ripp\\w*)\\b|\\b(open\\w*|tore|torn)\\b.*\\b(packet|wrapper|biscuits?)\\b", "witness": ["open"]},
+    {"id": "dip", "what": "a biscuit dipped into the coffee", "seconds": [58, 68],
+     "match": "\\bdipp?\\w*\\b|\\bdunk\\w*\\b|\\bsoak\\w*\\b", "witness": ["add_into"]},
+    {"id": "eat", "what": "the dipped biscuit eaten", "seconds": [68, 75],
+     "match": "\\b(eat\\w*|ate|eaten|bit\\w*|consum\\w*)\\b", "witness": []}
+  ]
+}
