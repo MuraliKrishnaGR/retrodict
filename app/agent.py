@@ -54,12 +54,14 @@ Time rules:
   mean a drink is old (steam is often invisible in photos). Without a seen trace, minutes_before_min is 0.
 
 When you finish:
+- Name a substance only as surely as the photo shows it: a brown powder that may be sugar, coffee or
+  cocoa is "brown powder (most likely coffee or sugar)", a milky drink "a milky drink (tea or coffee)".
 - Keep EVERY claim from the first reading that the photo supports, with its specific names ("the banana
   was peeled and sliced", not "fruit was cut"), each citing the object you found for it. Drop claims you
   could not support. One event per action (peeling the banana and cutting the apple are two events).
 - "summary": 1 or 2 plain sentences, at most 40 words, saying what most likely happened (not a list of
   objects); no object ids, no underscores.
-- Reason like a detective about unclear shapes: something white stuck in the sugar of a sugar jar is most
+- Reason like a detective about unclear shapes: something white standing in the powder of a jar is most
   likely a scoop or spoon left in it. Say "most likely", lower the confidence, and use it.
 - Connect the objects: a container with leftovers of the same food or liquid that is now in another
   container most likely held it before (it was poured or served from it). Name that link as an event.
@@ -282,7 +284,7 @@ async def investigate(models, scene: Scene, max_moves: int = MAX_MOVES, progress
                           "shadows lifted (faint steam, film; glare looks brighter there too, so count steam only if "
                           "it rises from the drink as a soft haze), glare dimmed (what reflections hide), and three "
                           "views of the object alone on black (whiteness, and the two that show the most detail in "
-                          "it): shapes INSIDE a jar or glass, like a spoon in sugar, show best in those.")
+                          "it): shapes INSIDE a jar or glass, like a scoop in powder, show best in those.")
             result = f"close-up of {step.object_id} is shown in the image now"
         elif action == "search" and (step.phrase or "").strip():
             phrase = " ".join(step.phrase.strip().lower().split())[:40]
