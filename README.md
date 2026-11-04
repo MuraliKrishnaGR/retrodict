@@ -7,9 +7,10 @@ Then it is checked against a real video of the same scene: on two real kitchen v
 and **7 of 8** events.
 
 ## Demo video
-[![Demo preview: the rewind walking back to the glass and the cap, then the photo next to the real video](docs/media/demo_preview.gif)](https://muralikrishnagr.github.io/retrodict/)
+[![Demo preview: the rewind walking back to the glass and the cap, then the photo next to the real video](docs/media/demo_preview.gif)](https://drive.google.com/file/d/1ZWeBMD9DjBfpTFAiSsDgVgOrVILTc-Ac/view?usp=sharing)
 
-**Watch it (2.6 min):** on the [project page](https://muralikrishnagr.github.io/retrodict/), or download
+**Watch it (2.6 min):** [on Google Drive](https://drive.google.com/file/d/1ZWeBMD9DjBfpTFAiSsDgVgOrVILTc-Ac/view?usp=sharing),
+on the [project page](https://muralikrishnagr.github.io/retrodict/), or download
 [docs/retrodict_demo.mp4](docs/retrodict_demo.mp4).
 **Click through it yourself:** the [live page](https://muralikrishnagr.github.io/retrodict/live/) shows both
 real runs, every step and its evidence, in the browser (no install, no key).
