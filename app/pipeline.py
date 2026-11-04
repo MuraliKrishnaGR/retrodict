@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image
 
 from app.agent import Scene, investigate
+from app.infer import infer_pour, infer_snack, name_actions
 from app.order import order_by_rules
 from app.propose import gather, propose
 from app.second_look import second_look
@@ -27,7 +28,7 @@ from app.read_state import name_objects, read_state
 from app.reason import propagate_order, reason, rewrite_summary
 from app.errors import save_details
 from app.imaging import prepare_image
-from app.verify import verify
+from app.verify import flesh_clocks_only, verify
 
 
 def mostly_contradicted(e: dict) -> bool:
@@ -148,6 +149,9 @@ async def run_photo(models, photo_path, out_dir, progress=None) -> dict:
         save_details(e)
         extra = {"events": [], "unused": [], "searched": []}
     timeline["events"] += extra["events"]
+    timeline["events"] = infer_pour(timeline["events"], scene_ctx.states, scene_ctx.labels,
+                                    scene_ctx.objects)
+    timeline["events"] = infer_snack(timeline["events"], scene_ctx.states, scene_ctx.labels)   # packet -> eaten
     for i, e in enumerate(timeline["events"], 1):   # unique ids for the checker
         e["id"] = f"e{i}"
     trace.step("second_look", f"{len(extra['unused'])} unused objects looked at, "
@@ -159,13 +163,15 @@ async def run_photo(models, photo_path, out_dir, progress=None) -> dict:
     image = scene_ctx.evidence_jpeg(cited) if cited else scene_ctx.sheet_jpeg()
     checked = await verify(models, image, timeline["events"], scene_ctx.labels)
     trace.step("verify", f"{checked['claims']} claims checked, {len(checked['rejected'])} events rejected", t)
+    checked["events"] = flesh_clocks_only(checked["events"], states, scene_ctx.labels)
+    checked["events"] = name_actions(checked["events"])     # "spoon left in the bowl" -> it was mixed
     checked["events"] = order_by_rules(checked["events"])   # physical order: peel, cut, into the bowl, mix
     propagate_order(checked["events"])              # surviving clocks tighten the steps that follow them
     for i, e in enumerate(checked["events"], 1):     # no gaps after rejections: e1, e2, e3...
         e["id"] = f"e{i}"
     result["events"], result["rejected"] = checked["events"], checked["rejected"]
     doubtful = [e for e in checked["events"] if mostly_contradicted(e)]
-    added = any(e.get("source") == "second look" for e in checked["events"])
+    added = any(e.get("source") for e in checked["events"])
     if checked["rejected"] or doubtful or added:    # the story told to people uses only what held up
         sure = [e for e in checked["events"] if not mostly_contradicted(e)]
         result["summary"] = await rewrite_summary(models, sure, checked["rejected"] + doubtful,
