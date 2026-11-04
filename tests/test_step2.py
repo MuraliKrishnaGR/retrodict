@@ -175,7 +175,8 @@ class StoryModels:
         }
         if tag == "verify":
             verdict = {"skin on the tea": "yes", "wrapper torn": "yes", "sugar spoon in mug": "no",
-                       "used spoon lying on the table": "yes"}
+                       "used spoon lying on the table": "yes",
+                       "the packet is torn open with food still inside": "unclear", "the cup holds a drink": "unclear"}
             checks = []
             for line in prompt.splitlines():
                 if line.startswith("- c"):
@@ -201,7 +202,7 @@ def test_full_pipeline(tmp_path):
     assert res["states"]["o2"]["traces"] == ["open_package", "crumbs"]        # unknown 'glitter' dropped
 
     descs = [e["description"] for e in res["events"]]
-    assert descs == ["tea was poured", "packet was opened"]                   # earliest first
+    assert descs == ["tea was poured", "packet was opened", "a biscuit was most likely eaten from the opened packet"]   # earliest first; the open packet implies eating
     tea = res["events"][0]
     assert (tea["minutes_before_min"], tea["minutes_before_max"]) == (10, 90)  # liquid_film clock
     assert tea["clock"] == "narrowed_by_clock" and tea["status"] == "verified"
@@ -209,7 +210,7 @@ def test_full_pipeline(tmp_path):
 
     saved = json.loads((tmp_path / "out" / "result.json").read_text())
     assert saved["summary"] == "Someone poured tea and opened a packet of biscuits."   # no rejected story in it
-    assert [e["id"] for e in saved["events"]] == ["e1", "e2"]
+    assert [e["id"] for e in saved["events"]] == ["e1", "e2", "e3"]
     assert (tmp_path / "out" / "sheet.jpg").exists()
 
 
@@ -350,7 +351,7 @@ def test_agent_out_of_moves_falls_back_to_single_reasoning(tmp_path):
     models = StoryModels(agent=script)
     res = asyncio.run(run_photo(models, _photo(tmp_path), tmp_path / "out"))
     assert models.tags[-3:] == ["reason", "verify", "summary"] and "agent_7" in models.tags and "agent_8" not in models.tags
-    assert [e["description"] for e in res["events"]] == ["tea was poured", "packet was opened"]
+    assert [e["description"] for e in res["events"]] == ["tea was poured", "packet was opened", "a biscuit was most likely eaten from the opened packet"]
     assert "single reasoning call" in res["trace"][3]["detail"]
 
 
@@ -362,7 +363,7 @@ def test_agent_crash_falls_back(tmp_path):
                 raise ValueError("model returned nonsense twice")
             return await super().spark_json(prompt, schema, jpeg, tag)
     res = asyncio.run(run_photo(Broken(), _photo(tmp_path), tmp_path / "out"))
-    assert len(res["events"]) == 2 and "ValueError" in res["trace"][3]["detail"]
+    assert len(res["events"]) == 3 and "ValueError" in res["trace"][3]["detail"]
 
 
 def test_bad_moves_are_reported_not_fatal(tmp_path):
@@ -371,7 +372,7 @@ def test_bad_moves_are_reported_not_fatal(tmp_path):
     res = asyncio.run(run_photo(StoryModels(agent=script), _photo(tmp_path), tmp_path / "out"))
     assert [m["result"] for m in res["moves"][:2]] == ["could not use zoom with those arguments",
                                                         "could not use clock with those arguments"]
-    assert len(res["events"]) == 2
+    assert len(res["events"]) == 3
 
 
 def test_no_clock_means_no_minimum_time():
@@ -745,3 +746,95 @@ def test_second_look_adds_a_missed_step(tmp_path):
     added = [e for e in res["events"] if e.get("source") == "second look"]
     assert len(added) == 1 and added[0]["evidence"][0]["object_id"] == "o3"      # o1 is not unused: dropped
     assert res["summary"] == "Someone poured tea and water."                      # the story is retold
+
+
+def test_cut_fruit_clock_is_not_for_peels():
+    """A browned peel does not date anything by the cut-fruit clock; browned or pale fruit flesh does."""
+    from app.verify import flesh_clocks_only
+    peel = {"id": "e1", "description": "the banana was peeled", "trace": "browned_cut", "clock": "clock_agrees",
+            "minutes_before_min": 15, "minutes_before_max": 40, "model_range": [15, 40],
+            "evidence": [{"object_id": "o3", "observation": "browned rim"}]}
+    flesh = dict(peel, id="e2", trace="fresh_cut", minutes_before_min=3, minutes_before_max=30,
+                 evidence=[{"object_id": "o15", "observation": "pale"}])
+    out = flesh_clocks_only([peel, flesh], {"o3": {"what": "tan strip with pith"}, "o15": {"what": "apple slice"}},
+                            {"o3": "banana peel 1", "o15": "apple slice 1"})
+    assert out[0]["clock"] == "clock_not_applied" and out[0]["minutes_before_min"] == 0
+    assert out[1]["clock"] == "clock_agrees" and out[1]["minutes_before_min"] == 3
+
+
+
+def test_a_leftover_utensil_becomes_the_action_it_shows():
+    from app.infer import name_actions
+    e = {"description": "the metal spoon was most likely left in the bowl after use", "evidence": []}
+    out = name_actions([e])[0]
+    assert out["description"] == "the food in the bowl was most likely mixed with the spoon, which was left standing in it"
+    assert out["read_as"] == e["description"]
+    for d in ("the knife was left on the board", "someone used the spoon to mix the salad and left it in the bowl"):
+        assert name_actions([{"description": d}])[0]["description"] == d          # no utensil-in-food, or already an action
+
+
+def test_second_look_checks_new_finds_first():
+    from types import SimpleNamespace
+    from app.second_look import MAX_UNUSED, unused_objects
+    objs = [{"id": f"o{i}", "area": 10} for i in range(1, 13)]
+    scene = SimpleNamespace(img=SimpleNamespace(width=100, height=100), objects=objs)
+    ids = unused_objects(scene, [{"evidence": [{"object_id": "o1"}]}], first=["o12"])
+    assert ids[0] == "o12" and "o1" not in ids and len(ids) == MAX_UNUSED
+
+
+def test_an_opened_part_empty_bottle_and_a_cup_mean_a_pour():
+    from app.infer import infer_pour
+    opened = {"id": "e1", "description": "the water bottle was most likely opened", "minutes_before_max": 30,
+              "evidence": [{"object_id": "o10", "observation": "cap off"}]}
+    states = {"o10": {"what": "clear plastic bottle", "observations": ["cap off", "liquid well below the open rim"]}}
+    labels = {"o10": "water bottle", "o19": "cup", "o5": "cup holder"}
+    out = infer_pour([opened], states, labels)
+    assert out[-1]["description"] == "water was most likely poured from the water bottle into the cup"
+    assert [ev["object_id"] for ev in out[-1]["evidence"]] == ["o10", "o19"] and out[-1]["source"].startswith("inferred")
+    assert infer_pour([opened], states, {"o10": "water bottle"}) == [opened]                     # no cup: nothing
+    full = {"o10": {"what": "bottle", "observations": ["cap off", "full to the top"]}}
+    assert infer_pour([opened], full, labels) == [opened]                                       # still full: nothing
+    poured = dict(opened, description="water was poured from the bottle")
+    assert infer_pour([poured], states, labels) == [poured]                                     # already told
+
+
+def test_a_cap_left_by_the_cup_says_where_it_was_poured():
+    from app.infer import infer_pour
+    opened = {"id": "e1", "description": "the water bottle was most likely opened", "minutes_before_max": 30,
+              "evidence": [{"object_id": "o10", "observation": "cap off"}]}
+    states = {"o10": {"what": "plastic bottle", "observations": ["cap off"]}}             # level not mentioned
+    labels = {"o10": "water bottle", "o19": "cup", "o21": "black lid"}
+    objects = [{"id": "o10", "bbox": [720, 430, 1020, 730]}, {"id": "o19", "bbox": [0, 270, 170, 465]},
+               {"id": "o21", "bbox": [130, 490, 250, 610]}]
+    out = infer_pour([opened], states, labels, objects)
+    assert [ev["object_id"] for ev in out[-1]["evidence"]] == ["o19", "o21"]
+    far = [dict(objects[2], bbox=[800, 300, 900, 400])] + objects[:2]                   # cap by the bottle
+    assert infer_pour([opened], states, labels, far) == [opened]
+
+
+def test_a_removed_lid_counts_as_opened():
+    from app.infer import OPENED
+    for d in ("The black water bottle lid was removed and placed on the tray", "the bottle cap was taken off",
+              "the water bottle was most likely opened", "the cap was set aside"):
+        assert OPENED.search(d), d
+    assert not OPENED.search("the banana was peeled")
+
+
+def test_an_opened_food_packet_by_a_drink_means_dipped_and_eaten():
+    from app.infer import infer_snack
+    opened = {"id": "e1", "description": "the biscuit packet was torn open", "minutes_before_max": 30,
+              "evidence": [{"object_id": "o6", "observation": "torn"}]}
+    states = {"o6": {"what": "foil wrapper holding biscuits"}, "o2": {"what": "steel cup holding milky tea"}}
+    labels = {"o6": "biscuit wrapper", "o2": "steel tumbler"}
+    out = infer_snack([opened], states, labels)
+    assert out[-1]["description"] == "a biscuit was most likely dipped into the drink in the steel tumbler and eaten"
+    assert [ev["object_id"] for ev in out[-1]["evidence"]] == ["o6", "o2"]
+    alone = infer_snack([opened], {"o6": states["o6"]}, {"o6": "biscuit wrapper"})
+    assert alone[-1]["description"] == "a biscuit was most likely eaten from the opened packet"
+    eaten = dict(opened, description="someone ate a biscuit from the torn packet")
+    out = infer_snack([eaten], states, labels)                                    # eaten told, dip not
+    assert out[-1]["description"] == "the biscuit was most likely dipped into the drink in the steel tumbler before it was eaten"
+    dipped = dict(opened, description="a biscuit was dipped in the tea")
+    assert infer_snack([dipped], states, labels) == [dipped]                      # already told
+    assert infer_snack([eaten], {"o6": states["o6"]}, {"o6": "biscuit wrapper"}) == [eaten]   # no drink
+    assert infer_snack([dict(opened, description="the jar was opened")], states, labels)[-1]["id"] == "e1"
