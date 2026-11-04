@@ -12,14 +12,18 @@ of a scene, in six views, each labelled in its corner: as photographed; shadows 
 drips; glare looks brighter there too); glare dimmed (what reflections hide on or behind steel, glass or
 plastic); and three views of the object ALONE on black: a whiteness map (white things bright, coloured things
 dark) and the two light edits that show the most detail in this object. Shapes INSIDE a jar or glass (a
-white spoon in brown sugar, milk film, drips) show best in the views of the object alone. Other objects in the scene, for
+scoop standing in powder, a film on a drink, drips) show best in the views of the object alone. Other objects in the scene, for
 context only: {others}. You are a careful investigator: describe {oid} only, and only what is VISIBLE NOW.
 Do not guess what happened.
 
 Give:
 - "name": 1 to 3 words, the specific everyday name of what {oid} is, as a person would say it: "banana
   peel", "orange peel", "apple pieces", "steel tumbler", "bottle cap", "fruit bowl". Never a vague one
-  ("peel", "object", "item", "lid") when the close-up shows which kind it is.
+  ("peel", "object", "item") when the close-up shows which kind it is.
+  When the kind cannot be told for sure from the photo (a brown powder may be sugar, coffee or cocoa; a
+  milky drink may be tea or coffee; a clear liquid may be water or something else), name it by how it
+  looks ("brown powder", "milky brown drink") and put the likely kinds in "what" ("most likely coffee or
+  sugar"). Never state one of them as fact.
 - "what": a short description that tells it apart (colour, material, lid, contents).
 - "observations": 2 to 5 short visible facts (fill level, open or closed, wet or dry, steam, crumbs,
   wrapper torn, position, residue). Write "unclear" rather than guess. For a cup, glass or pot, always
@@ -28,6 +32,9 @@ Give:
   For a see-through container, say what is inside it, including any spoon or scoop standing in it.
   Never leave out a shape you cannot name: describe it ("something white stuck in the brown powder") and
   give its most likely identity from context, marked as likely ("most likely a spoon or scoop").
+  A round, shallow thing lying next to an open jar, bottle or pot may be its LID, upside down: flat, with
+  a seal, liner, ridges or thread inside and no real depth. Say so, and do not read a drink, skin or film
+  on it unless liquid clearly fills it.
 - "traces": any of these physical traces you can actually SEE on it (exact names, can be empty). Each is
   defined by what it looks like; only use a name when the crop really shows that:
 {traces}
