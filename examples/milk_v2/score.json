@@ -1,0 +1,255 @@
+{
+  "key": "eval\\keys\\milk_v2.json",
+  "run": "out\\milk_v2",
+  "scene": {
+    "video": "milk_v2.mp4",
+    "split": "test",
+    "video_seconds": 75
+  },
+  "score": {
+    "matched_by": "blind judge",
+    "events": [
+      {
+        "id": "milk_pour",
+        "what": "hot milk poured from the pan into the steel tumbler (pan held with the gripper)",
+        "true_min": [
+          1.13,
+          2.13
+        ],
+        "found": true,
+        "event": "e4",
+        "text": "a light brown milky drink (most likely tea or coffee with milk and brown powder) was made and poured into the small steel tumbler, most likely using the white liquid from the large steel bowl",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "jar_open",
+        "what": "coffee jar opened, its lid put down upside down beside it",
+        "true_min": [
+          0.98,
+          1.97
+        ],
+        "found": true,
+        "event": "e1",
+        "text": "the clear plastic jar containing brown powder (most likely coffee or sugar) was opened and its lid left off on the counter",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "coffee_add",
+        "what": "coffee powder scooped from the jar into the milk; the scoop left standing in the jar",
+        "true_min": [
+          0.85,
+          1.88
+        ],
+        "found": true,
+        "event": "e3",
+        "text": "brown powder (most likely coffee or sugar) was scooped from the jar with the white plastic spoon left standing inside it",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "stir",
+        "what": "coffee stirred with the steel spoon",
+        "true_min": [
+          0.65,
+          1.75
+        ],
+        "found": true,
+        "event": "e5",
+        "text": "the shiny steel spoon was used to stir the drink and left on the black countertop with milky residue",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "spill",
+        "what": "some milk spilled on the counter beside the tumbler while stirring",
+        "true_min": [
+          0.62,
+          1.62
+        ],
+        "found": true,
+        "event": "e6",
+        "text": "a small amount of the white milky liquid was spilled onto the black countertop next to the small steel cup",
+        "dated": true,
+        "range_min": [
+          0.0,
+          45.0
+        ],
+        "covered": true,
+        "width": 45.0,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "packet_open",
+        "what": "biscuit packet torn open",
+        "true_min": [
+          0.38,
+          1.42
+        ],
+        "found": true,
+        "event": "e7",
+        "text": "the blue and silver biscuit packet was torn open exposing the stack of rectangular waffle biscuits",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "dip",
+        "what": "a biscuit dipped into the coffee",
+        "true_min": [
+          0.22,
+          1.28
+        ],
+        "found": false
+      },
+      {
+        "id": "eat",
+        "what": "the dipped biscuit eaten",
+        "true_min": [
+          0.1,
+          1.12
+        ],
+        "found": true,
+        "event": "e8",
+        "text": "one rectangular waffle biscuit was broken and partially eaten, leaving a triangular fragment on the stack",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      }
+    ],
+    "retro": [
+      {
+        "event": "e1",
+        "text": "the clear plastic jar containing brown powder (most likely coffee or sugar) was opened and its lid left off on the counter",
+        "key": "jar_open",
+        "keys": [
+          "jar_open"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e2",
+        "text": "white liquid (most likely milk) was poured into the large steel bowl",
+        "key": null,
+        "keys": [],
+        "wrong": true
+      },
+      {
+        "event": "e3",
+        "text": "brown powder (most likely coffee or sugar) was scooped from the jar with the white plastic spoon left standing inside it",
+        "key": "coffee_add",
+        "keys": [
+          "coffee_add"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e4",
+        "text": "a light brown milky drink (most likely tea or coffee with milk and brown powder) was made and poured into the small steel tumbler, most likely using the white liquid from the large steel bowl",
+        "key": "milk_pour",
+        "keys": [
+          "milk_pour"
+        ],
+        "wrong": true
+      },
+      {
+        "event": "e5",
+        "text": "the shiny steel spoon was used to stir the drink and left on the black countertop with milky residue",
+        "key": "stir",
+        "keys": [
+          "stir"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e6",
+        "text": "a small amount of the white milky liquid was spilled onto the black countertop next to the small steel cup",
+        "key": "spill",
+        "keys": [
+          "spill"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e7",
+        "text": "the blue and silver biscuit packet was torn open exposing the stack of rectangular waffle biscuits",
+        "key": "packet_open",
+        "keys": [
+          "packet_open"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e8",
+        "text": "one rectangular waffle biscuit was broken and partially eaten, leaving a triangular fragment on the stack",
+        "key": "eat",
+        "keys": [
+          "eat"
+        ],
+        "wrong": true
+      }
+    ],
+    "false_claims": [
+      {
+        "event": "e2",
+        "text": "white liquid (most likely milk) was poured into the large steel bowl"
+      },
+      {
+        "event": "e4",
+        "text": "a light brown milky drink (most likely tea or coffee with milk and brown powder) was made and poured into the small steel tumbler, most likely using the white liquid from the large steel bowl"
+      },
+      {
+        "event": "e8",
+        "text": "one rectangular waffle biscuit was broken and partially eaten, leaving a triangular fragment on the stack"
+      }
+    ],
+    "found": 7,
+    "total": 8,
+    "dated": 1,
+    "covered": 1,
+    "median_width_min": 45.0,
+    "estimated": 0,
+    "est_covered": 0,
+    "real_span_min": [
+      0.1,
+      2.13
+    ],
+    "order_agree": 19,
+    "order_pairs": 21,
+    "order_wrong": [
+      "milk_pour happened before jar_open",
+      "milk_pour happened before coffee_add"
+    ],
+    "unsupported": [
+      {
+        "event": "e2",
+        "text": "white liquid (most likely milk) was poured into the large steel bowl",
+        "wrong": true
+      }
+    ]
+  }
+}

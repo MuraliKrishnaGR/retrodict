@@ -1,0 +1,52 @@
+{
+  "judge": "Muse Spark Open, blind (claims labelled A, B, C; system not named)",
+  "claims_text": [
+    "the clear plastic jar containing brown powder (most likely coffee or sugar) was opened and its lid left off on the counter",
+    "white liquid (most likely milk) was poured into the large steel bowl",
+    "brown powder (most likely coffee or sugar) was scooped from the jar with the white plastic spoon left standing inside it",
+    "a light brown milky drink (most likely tea or coffee with milk and brown powder) was made and poured into the small steel tumbler, most likely using the white liquid from the large steel bowl",
+    "the shiny steel spoon was used to stir the drink and left on the black countertop with milky residue",
+    "a small amount of the white milky liquid was spilled onto the black countertop next to the small steel cup",
+    "the blue and silver biscuit packet was torn open exposing the stack of rectangular waffle biscuits",
+    "one rectangular waffle biscuit was broken and partially eaten, leaving a triangular fragment on the stack"
+  ],
+  "covers": {
+    "e1": [
+      "jar_open"
+    ],
+    "e2": [],
+    "e3": [
+      "coffee_add"
+    ],
+    "e4": [
+      "milk_pour"
+    ],
+    "e5": [
+      "stir"
+    ],
+    "e6": [
+      "spill"
+    ],
+    "e7": [
+      "packet_open"
+    ],
+    "e8": [
+      "eat"
+    ]
+  },
+  "wrong": [
+    "e2",
+    "e4",
+    "e8"
+  ],
+  "notes": {
+    "e1": "States jar opened and lid left off, matches jar_open; coffee or sugar includes coffee",
+    "e2": "Claims pour into large steel bowl, contradicts milk_pour into small steel tumbler",
+    "e3": "States brown powder scooped from jar with spoon left inside, matches coffee_add; coffee or sugar includes coffee",
+    "e4": "Poured into small steel tumbler matches milk_pour but claims source was large steel bowl, contradicts pour from pan",
+    "e5": "Steel spoon used to stir matches stir; left on counter with residue is not a contradiction",
+    "e6": "Spilled milky liquid next to small steel cup matches spill beside tumbler",
+    "e7": "Packet torn open matches packet_open; colour/shape details not contradictions",
+    "e8": "Partially eaten matches eat but claims biscuit was broken leaving fragment, action that did not happen; no dip stated"
+  }
+}
