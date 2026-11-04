@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retrodict</title>
+<meta name="description" content="From one photo: what most likely happened before it was taken, proved against a real video.">
+<style>
+  :root { --paper: #eef3f4; --wash: #d7e5eb; --ink: #12304f; --muted: #536a7e; --accent: #c9861a; --ok: #2e7a57; --no: #b3412e; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --paper: #0e1b29; --wash: #17293b; --ink: #e2ecf1; --muted: #93a9ba; --accent: #e0a03a; --ok: #5fb28b; --no: #e27a66; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: clamp(40px, 7vw, 64px); margin: 0; letter-spacing: -0.02em; }
+  .lede { font: 400 clamp(19px, 2.6vw, 24px)/1.4 Georgia, "Times New Roman", serif; max-width: 46ch; margin: 10px 0 24px; }
+  video, img { width: 100%; border-radius: 10px; background: #000; display: block; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 44px 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--wash); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  tr.us td { font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  .models { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .models div { background: var(--wash); border-radius: 10px; padding: 14px 16px; }
+  .models b { display: block; }
+  .note { color: var(--muted); font-size: 15px; }
+  a { color: var(--accent); }
+  ol { padding-left: 22px; } li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Retrodict</h1>
+  <p class="lede">From one photo: what most likely happened before it was taken, in what order and when, each claim tied to evidence in the photo, then checked against a real video.</p>
+  <video src="retrodict_demo.mp4" controls playsinline preload="metadata" poster="media/proof_rewind.jpg"></video>
+  <p class="note"><b><a href="live/">Explore the real runs yourself</a></b>: the Retrodict page on both photos, every step, its evidence and the score against the video. Demo, 2.6 min. Code: <a href="https://github.com/MuraliKrishnaGR/retrodict">github.com/MuraliKrishnaGR/retrodict</a></p>
+
+  <h2>Only Meta models</h2>
+  <div class="models">
+    <div><b>Muse Spark Open</b>reads the photo, proposes events, investigates as an agent, checks every claim.</div>
+    <div><b>SAM 3.1</b>outlines every object and searches inside objects for small clues (peels, a cap).</div>
+    <div><b>V-JEPA 2</b>watches the real video as a second witness, for evaluation only.</div>
+  </div>
+
+  <h2>How it works</h2>
+  <ol>
+    <li><b>Propose.</b> One reading of the whole photo lists what most likely happened, and what each claim rests on.</li>
+    <li><b>Gather.</b> SAM 3.1 finds that evidence: peels, slices, the glass, the cap.</li>
+    <li><b>Prove.</b> An investigator agent decides each claim; a second look works through a list of common actions for missed steps; a separate checker confirms or rejects every visible fact.</li>
+    <li><b>Time.</b> Times come only from physical clues: cut apple and banana still pale means cut within half an hour.</li>
+    <li><b>Rewind.</b> The real photo walked back, clue by clue. Nothing is generated.</li>
+    <li><b>Check.</b> A real video of the scene is the answer key, written before the first run, scored by a blind judge.</li>
+  </ol>
+
+  <h2>Proof rewind</h2>
+  <img src="media/proof_rewind.jpg" alt="Left: the photo with the glass, the cap and the bottle Retrodict cited for the pour. Right: the real video of the water being poured, played backward.">
+
+  <h2>Results on two real scenes</h2>
+  <div class="scroll"><table>
+    <tr><th>Scene</th><th>Real events found</th><th>Order</th><th>Times</th><th>Evidence per claim</th></tr>
+    <tr class="us"><td>Fruit salad</td><td>8 of 8</td><td>24 of 27</td><td>2 of 2 contain the real time</td><td>outlined and checked</td></tr>
+    <tr class="us"><td>Coffee and biscuits</td><td>7 of 8</td><td>19 of 21</td><td>1 of 1 contains the real time</td><td>outlined and checked</td></tr>
+  </table></div>
+  <p class="note">The pour into the glass was found from what it left: the bottle open, a glass on the tray, and the bottle's cap put down beside the glass. The answer key was committed before the runs it scores, and the judge's verdicts were checked against the video frames.</p>
+  <img src="media/how_it_did.jpg" alt="The real order of events from the video on the left, Retrodict's order on the right, joined by lines.">
+
+  <h2>Honest by design</h2>
+  <p>A time is given only when a real clue in the photo supports it; otherwise it says "time unknown". The rewind moves only real pixels and labels what it cannot show. Every result is a best guess from the photo, not proof.</p>
+</main>
+</body>
+</html>
