@@ -21,6 +21,8 @@ Physical traces you may use (what each looks like, and what it is confused with)
 
 List the events oldest first, one action per event, with specific names ("the banana was peeled", not
 "fruit was prepared"). Only include events the photo gives evidence for; say "most likely" where you infer.
+Name a substance only as surely as the photo shows it: "brown powder (most likely coffee or sugar)", "a
+milky drink (tea or coffee)"; a round flat thing beside an open jar may be its lid lying upside down.
 For each event, "look_for": 1 to 3 things IN THE PHOTO the event rests on, each a short phrase of how it
 LOOKS (colour, material, noun) so a segmenter can find it: "yellow banana peel", "green orange peel",
 "pale apple pieces", "steel tumbler", "black bottle cap", "metal spoon". Include the container something
