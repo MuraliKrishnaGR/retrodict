@@ -101,6 +101,8 @@ def score_run(result: dict, key: dict, judged: dict | None = None) -> dict:
             dated = is_dated(e)                    # a time counts only if a clue in the photo gave one
             row.update(event=e["id"], text=e["description"], dated=dated, range_min=[lo, hi] if dated else None,
                        covered=dated and lo <= t_hi and hi >= t_lo, width=round(hi - lo, 1) if dated else None)
+            est = None if dated else e.get("estimate")       # the reasoned time, scored apart from proven ones
+            row.update(estimate=est, est_covered=bool(est) and est[0] <= t_hi and est[1] >= t_lo)
         rows.append(row)
     found = [r for r in rows if r["found"]]
     # order: Retrodict lists events oldest first; compare every pair of found events with the real order
@@ -136,6 +138,8 @@ def score_run(result: dict, key: dict, judged: dict | None = None) -> dict:
         "found": len(found), "total": len(rows),
         "dated": len(dated), "covered": sum(r["covered"] for r in dated),
         "median_width_min": _median([r["width"] for r in dated]),
+        "estimated": sum(1 for r in found if r.get("estimate")),
+        "est_covered": sum(1 for r in found if r.get("est_covered")),
         "real_span_min": [min(r["true_min"][0] for r in rows), max(r["true_min"][1] for r in rows)],
         "order_agree": agree, "order_pairs": pairs, "order_wrong": wrong,
         "unsupported": unsupported,
