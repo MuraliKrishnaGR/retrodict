@@ -41,7 +41,10 @@ def main():
         if not r["found"]:
             print(f"  MISSED   {r['what']}  (really {real})")
         else:
-            if not r["dated"]:
+            if not r["dated"] and r.get("estimate"):
+                lo_e, hi_e = r["estimate"]
+                when = f"estimate {mins(lo_e, hi_e)}, " + ("in range" if r["est_covered"] else "OUT OF RANGE")
+            elif not r["dated"]:
                 when = "no time given (no clue in the photo)"
             else:
                 when = f"{mins(*r['range_min'])}, " + ("in range" if r["covered"] else "OUT OF RANGE")
@@ -56,6 +59,9 @@ def main():
               f"the real time; typical width {s['median_width_min']:g} min.")
     else:
         print(f"Times: no confirmed clue dated any of them, so {who} gives no times ('time unknown').")
+    if s.get("estimated"):
+        print(f"Estimates (reasoned from the order, no clue): {s['estimated']} found events; "
+              f"{s['est_covered']} contain the real time.")
     print(f"Order: {s['order_agree']} of {s['order_pairs']} pairs right"
           + (f" (wrong: {'; '.join(s['order_wrong'])})" if s["order_wrong"] else "") + ".")
     print(f"Events not in the key: {len(s['unsupported'])}.")
