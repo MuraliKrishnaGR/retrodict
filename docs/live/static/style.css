@@ -1,0 +1,176 @@
+/* Cyanotype: the oldest way of developing a picture from light, in Prussian blue on paper.
+   The one loud element is the time ruler; everything else stays quiet. */
+:root {
+  --paper: #eef3f4;
+  --wash: #d7e5eb;
+  --ink: #12304f;
+  --muted: #536a7e;
+  --range: #c9861a;
+  --ok: #2e7a57;
+  --warn: #a8761c;
+  --no: #b3412e;
+  --line: #b9ccd6;
+  --sans: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1b29; --wash: #17293b; --ink: #e2ecf1; --muted: #93a9ba;
+    --range: #e0a03a; --ok: #5fb28b; --warn: #d6a24a; --no: #e27a66; --line: #2a4258;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1b29; --wash: #17293b; --ink: #e2ecf1; --muted: #93a9ba;
+  --range: #e0a03a; --ok: #5fb28b; --warn: #d6a24a; --no: #e27a66; --line: #2a4258;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 16px/1.5 var(--sans); }
+h1, h2, h3 { margin: 0; font-weight: 700; }
+button, .btn { font: inherit; }
+:focus-visible { outline: 3px solid var(--range); outline-offset: 2px; }
+
+.top { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+       padding: 28px 32px 16px; }
+.brand h1 { font-size: 34px; letter-spacing: -0.02em; line-height: 1; }
+.brand p { margin: 6px 0 0; color: var(--muted); }
+.actions { display: flex; gap: 10px; }
+.static-note { margin: 0; color: var(--muted); font-size: 14px; }
+.static-note a { color: inherit; }
+.btn { display: inline-block; padding: 10px 16px; border: 1.5px solid var(--ink); border-radius: 999px;
+       cursor: pointer; background: transparent; color: var(--ink); }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn:hover { background: var(--wash); color: var(--ink); }
+
+.runs { padding: 0 32px 12px; }
+.strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.strip button { flex: 0 0 auto; width: 92px; padding: 0; border: 2px solid transparent; border-radius: 8px;
+                background: none; cursor: pointer; }
+.strip button[aria-current="true"] { border-color: var(--range); }
+.strip img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; }
+
+main { padding: 0 32px 48px; }
+.empty p { max-width: 62ch; font: 400 22px/1.45 var(--serif); }
+
+.stage { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: 28px;
+         grid-template-areas: "media log" "ruler ruler" "detail detail" "check check"; }
+.media { grid-area: media; }
+.log { grid-area: log; }
+.ruler-wrap { grid-area: ruler; }
+.detail { grid-area: detail; }
+.check { grid-area: check; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.tabs button { border: 0; background: none; color: var(--muted); padding: 6px 10px; border-radius: 6px;
+               cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--wash); color: var(--ink); font-weight: 500; }
+.frame { margin: 0; }
+.frame img, .frame video { display: block; width: 100%; border-radius: 10px; background: var(--wash); }
+.frame figcaption { color: var(--warn); font-size: 14px; margin-top: 6px; }
+.story { font: 400 24px/1.4 var(--serif); margin: 18px 0 0; max-width: 60ch; }
+
+.log h2, .ruler-wrap h2 { font-size: 15px; color: var(--muted); font-weight: 500; margin-bottom: 10px; }
+.steps { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 4px; }
+.steps li { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; color: var(--muted); }
+.steps li.running { color: var(--ink); }
+.steps li.running::after { content: "working"; color: var(--range); }
+.steps li.done { color: var(--ink); }
+.steps li .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.moves { padding-left: 22px; margin: 0; display: grid; gap: 12px; }
+.moves li { padding-left: 4px; }
+.moves .what { font-weight: 500; }
+.moves .why { color: var(--muted); font-size: 14px; margin-top: 2px; }
+
+/* The time ruler: now on the right, the past to the left, each event an honest range. */
+.ruler { position: relative; padding: 0 0 34px; }
+.row { display: grid; grid-template-columns: minmax(140px, 26%) 1fr; gap: 14px; align-items: center;
+       padding: 6px 0; border: 0; background: none; color: inherit; width: 100%; text-align: left;
+       cursor: pointer; font: inherit; border-radius: 6px; }
+.row:hover, .row[aria-pressed="true"] { background: var(--wash); }
+.row .label { font-size: 15px; line-height: 1.3; padding-left: 6px; }
+.track { position: relative; height: 22px; margin-right: 22px; }   /* lines up with the axis */
+.track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--line); }
+.band { position: absolute; top: 3px; height: 16px; border-radius: 3px; background: var(--range); opacity: .9; }
+.band.partly { opacity: .55; }
+.band.contested { background: repeating-linear-gradient(135deg, var(--no) 0 6px, transparent 6px 10px);
+                  outline: 1.5px solid var(--no); }
+.band.estimate { background: transparent; box-shadow: inset 0 0 0 2px var(--range); opacity: .8; }
+.band.clocked { box-shadow: inset 0 0 0 2px var(--ink); }
+.axis { position: relative; margin: 0 22px 0 calc(26% + 14px); height: 28px; border-top: 1.5px solid var(--ink); }
+.tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 13px; color: var(--muted);
+        padding-top: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tick::before { content: ""; position: absolute; left: 50%; top: -1px; height: 6px; border-left: 1.5px solid var(--ink); }
+.tick.now { color: var(--ink); font-weight: 700; }
+.caveat { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+
+.detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 28px;
+          border-top: 1.5px solid var(--ink); padding-top: 20px; }
+.when { color: var(--range); font-weight: 700; margin: 0 0 4px; }
+.detail h3 { font: 500 22px/1.35 var(--serif); }
+.physics { margin: 10px 0 0; padding-left: 10px; border-left: 3px solid var(--ink); }
+.evidence { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 10px; }
+.evidence li { display: grid; grid-template-columns: 112px 1fr; gap: 10px; }
+.verdict { font-size: 13px; font-weight: 700; }
+.verdict.yes { color: var(--ok); } .verdict.partly, .verdict.unclear { color: var(--warn); } .verdict.no { color: var(--no); }
+.evidence .note { color: var(--muted); font-size: 14px; }
+.alts { color: var(--muted); padding-left: 18px; margin: 14px 0 0; }
+.alts li::marker { content: "or  "; }
+.views { margin: 0; }
+.views img { width: 100%; border-radius: 8px; background: var(--wash); }
+.views figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+.error { color: var(--no); font-weight: 500; }
+
+/* Steps with no clue to their time: in order only, no invented band. */
+.num { display: inline-block; min-width: 1.6em; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.track.undated::before { border-top-style: dotted; opacity: .6; }
+.unknown { position: absolute; right: 0; top: 1px; font-size: 13px; color: var(--muted); background: var(--paper); padding-left: 8px; }
+.row:hover .unknown, .row[aria-pressed="true"] .unknown { background: var(--wash); }
+.order-note { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+.ruler.orderonly { padding-bottom: 0; }
+.ruler.orderonly .row { grid-template-columns: 1fr auto; max-width: 900px; }
+.chip { font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; white-space: nowrap; }
+
+/* How it did: the real order from the video next to Retrodict's order, joined by lines. */
+.check { border-top: 1.5px solid var(--ink); padding-top: 20px; }
+.check h2 { font-size: 15px; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+.c-scene { color: var(--warn); font-size: 14px; margin: 0 0 8px; }
+.c-sum { font: 400 20px/1.45 var(--serif); margin: 0 0 14px; max-width: 70ch; }
+.order { display: grid; grid-template-columns: minmax(0, 1fr) clamp(36px, 9vw, 110px) minmax(0, 1fr); column-gap: 6px; }
+.col-head { font-size: 13px; font-weight: 700; color: var(--muted); padding-bottom: 6px; }
+.order ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; align-content: start; }
+.order li { display: flex; gap: 4px; font-size: 15px; line-height: 1.3; padding: 4px 6px; border-radius: 6px; background: var(--wash); }
+.order li.missed, .order li.made-up { background: none; outline: 1.5px dashed var(--line); }
+.order li.missed b { color: var(--muted); font-weight: 400; }
+.order li b { font-weight: 500; }
+.links { width: 100%; height: 100%; overflow: visible; }
+.links path { fill: none; stroke-width: 2; }
+.links path.right { stroke: var(--ok); }
+.links path.wrong { stroke: var(--no); stroke-dasharray: 5 4; }
+.status { display: block; font-size: 13px; font-weight: 700; }
+.status.missed { color: var(--no); }
+.status.other { color: var(--muted); }
+.witness { display: block; font-size: 13px; color: var(--muted); }
+.c-legend { color: var(--muted); font-size: 14px; display: flex; gap: 4px 8px; flex-wrap: wrap; margin: 12px 0 6px; }
+.lg { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; margin-right: 10px; }
+.sw { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
+.sw.right { border-color: var(--ok); }
+.sw.wrong { border-color: var(--no); border-top-style: dashed; }
+.c-when { font-size: 15px; margin: 6px 0 0; max-width: 80ch; }
+.c-extra { color: var(--muted); padding-left: 18px; margin: 8px 0 0; display: grid; gap: 6px; font-size: 15px; }
+
+@media (max-width: 860px) {
+  .top, .runs, main { padding-left: 16px; padding-right: 16px; }
+  .stage { grid-template-columns: 1fr; grid-template-areas: "media" "log" "ruler" "detail" "check"; }
+  .detail { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 1fr; gap: 4px; }
+  .ruler.orderonly .row { grid-template-columns: 1fr; }
+  .chip { justify-self: start; margin-left: 6px; }
+  .axis { margin-left: 22px; }
+  .track { margin-left: 22px; }
+  .story { font-size: 20px; }
+  .order li { font-size: 14px; flex-direction: column; gap: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .band { transition: width .4s ease, left .4s ease; }
+}

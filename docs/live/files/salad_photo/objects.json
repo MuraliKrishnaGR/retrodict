@@ -1,0 +1,216 @@
+{
+  "photo": "data\\salad_photo.jpg",
+  "size": [
+    1024,
+    768
+  ],
+  "not_found": [
+    "cap"
+  ],
+  "concepts": [
+    {
+      "name": "peel",
+      "count": 6,
+      "desc": "mixed banana and citrus rinds"
+    },
+    {
+      "name": "cap",
+      "count": 1,
+      "desc": "black plastic lid off bottle"
+    },
+    {
+      "name": "bottle",
+      "count": 1,
+      "desc": "translucent plastic bottle on side"
+    },
+    {
+      "name": "bowl",
+      "count": 1,
+      "desc": "steel bowl with chopped fruit"
+    },
+    {
+      "name": "knife",
+      "count": 1,
+      "desc": "small wooden handle blade"
+    },
+    {
+      "name": "cutting board",
+      "count": 1,
+      "desc": "metal board with scraps"
+    }
+  ],
+  "search": [
+    {
+      "name": "peel",
+      "phrase": "peel",
+      "found": 6
+    },
+    {
+      "name": "cap",
+      "phrase": "cap",
+      "found": 0
+    },
+    {
+      "name": "bottle",
+      "phrase": "bottle",
+      "found": 1
+    },
+    {
+      "name": "bowl",
+      "phrase": "bowl",
+      "found": 1
+    },
+    {
+      "name": "knife",
+      "phrase": "knife",
+      "found": 1
+    },
+    {
+      "name": "cutting board",
+      "phrase": "cutting board",
+      "found": 2
+    }
+  ],
+  "objects": [
+    {
+      "id": "o1",
+      "label": "cutting board",
+      "bbox": [
+        0.0,
+        86.0,
+        895.0,
+        681.0
+      ],
+      "mask_png": "masks/o1.png",
+      "area": 194070,
+      "score": 0.7951,
+      "concept": "cutting board"
+    },
+    {
+      "id": "o2",
+      "label": "peel 1",
+      "bbox": [
+        405.0,
+        205.0,
+        497.0,
+        307.0
+      ],
+      "mask_png": "masks/o2.png",
+      "area": 6534,
+      "score": 0.6576,
+      "concept": "peel"
+    },
+    {
+      "id": "o3",
+      "label": "peel 2",
+      "bbox": [
+        544.0,
+        205.0,
+        647.0,
+        286.0
+      ],
+      "mask_png": "masks/o3.png",
+      "area": 2189,
+      "score": 0.6684,
+      "concept": "peel"
+    },
+    {
+      "id": "o4",
+      "label": "peel 3",
+      "bbox": [
+        608.0,
+        215.0,
+        742.0,
+        426.0
+      ],
+      "mask_png": "masks/o4.png",
+      "area": 12037,
+      "score": 0.5418,
+      "concept": "peel"
+    },
+    {
+      "id": "o5",
+      "label": "peel 4",
+      "bbox": [
+        644.0,
+        214.0,
+        729.0,
+        312.0
+      ],
+      "mask_png": "masks/o5.png",
+      "area": 4815,
+      "score": 0.5981,
+      "concept": "peel"
+    },
+    {
+      "id": "o6",
+      "label": "peel 5",
+      "bbox": [
+        434.0,
+        292.0,
+        529.0,
+        386.0
+      ],
+      "mask_png": "masks/o6.png",
+      "area": 6825,
+      "score": 0.6926,
+      "concept": "peel"
+    },
+    {
+      "id": "o7",
+      "label": "peel 6",
+      "bbox": [
+        380.0,
+        320.0,
+        437.0,
+        384.0
+      ],
+      "mask_png": "masks/o7.png",
+      "area": 1807,
+      "score": 0.6361,
+      "concept": "peel"
+    },
+    {
+      "id": "o8",
+      "label": "bowl",
+      "bbox": [
+        257.0,
+        384.0,
+        578.0,
+        674.0
+      ],
+      "mask_png": "masks/o8.png",
+      "area": 37672,
+      "score": 0.9524,
+      "concept": "bowl"
+    },
+    {
+      "id": "o9",
+      "label": "knife",
+      "bbox": [
+        630.0,
+        405.0,
+        676.0,
+        589.0
+      ],
+      "mask_png": "masks/o9.png",
+      "area": 4951,
+      "score": 0.875,
+      "concept": "knife"
+    },
+    {
+      "id": "o10",
+      "label": "bottle",
+      "bbox": [
+        721.0,
+        427.0,
+        1024.0,
+        733.0
+      ],
+      "mask_png": "masks/o10.png",
+      "area": 48062,
+      "score": 0.9155,
+      "concept": "bottle"
+    }
+  ]
+}

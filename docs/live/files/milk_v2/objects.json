@@ -1,0 +1,160 @@
+{
+  "photo": "data\\milk_v2.jpeg",
+  "size": [
+    768,
+    1024
+  ],
+  "not_found": [
+    "lid"
+  ],
+  "concepts": [
+    {
+      "name": "bowl",
+      "count": 1,
+      "desc": "large steel with white liquid"
+    },
+    {
+      "name": "jar",
+      "count": 1,
+      "desc": "open glass with brown powder and scoop"
+    },
+    {
+      "name": "lid",
+      "count": 1,
+      "desc": "small round cap beside jar"
+    },
+    {
+      "name": "cup",
+      "count": 1,
+      "desc": "small steel with milky tea"
+    },
+    {
+      "name": "spoon",
+      "count": 1,
+      "desc": "metal teaspoon near biscuits"
+    },
+    {
+      "name": "wrapper",
+      "count": 1,
+      "desc": "torn blue foil with stacked biscuits"
+    }
+  ],
+  "search": [
+    {
+      "name": "bowl",
+      "phrase": "bowl",
+      "found": 4
+    },
+    {
+      "name": "jar",
+      "phrase": "jar",
+      "found": 1
+    },
+    {
+      "name": "lid",
+      "phrase": "lid",
+      "found": 0
+    },
+    {
+      "name": "cup",
+      "phrase": "cup",
+      "found": 3
+    },
+    {
+      "name": "spoon",
+      "phrase": "spoon",
+      "found": 2
+    },
+    {
+      "name": "wrapper",
+      "phrase": "wrapper",
+      "found": 1
+    }
+  ],
+  "objects": [
+    {
+      "id": "o1",
+      "label": "bowl",
+      "bbox": [
+        168.0,
+        210.0,
+        367.0,
+        413.0
+      ],
+      "mask_png": "masks/o1.png",
+      "area": 31462,
+      "score": 0.8128,
+      "concept": "bowl"
+    },
+    {
+      "id": "o2",
+      "label": "cup",
+      "bbox": [
+        469.0,
+        416.0,
+        581.0,
+        527.0
+      ],
+      "mask_png": "masks/o2.png",
+      "area": 9897,
+      "score": 0.6678,
+      "concept": "cup"
+    },
+    {
+      "id": "o3",
+      "label": "jar",
+      "bbox": [
+        200.0,
+        526.0,
+        355.0,
+        696.0
+      ],
+      "mask_png": "masks/o3.png",
+      "area": 11818,
+      "score": 0.8432,
+      "concept": "jar"
+    },
+    {
+      "id": "o4",
+      "label": "spoon 1",
+      "bbox": [
+        253.0,
+        565.0,
+        291.0,
+        643.0
+      ],
+      "mask_png": "masks/o4.png",
+      "area": 1226,
+      "score": 0.8083,
+      "concept": "spoon"
+    },
+    {
+      "id": "o5",
+      "label": "spoon 2",
+      "bbox": [
+        432.0,
+        572.0,
+        621.0,
+        690.0
+      ],
+      "mask_png": "masks/o5.png",
+      "area": 5087,
+      "score": 0.9768,
+      "concept": "spoon"
+    },
+    {
+      "id": "o6",
+      "label": "wrapper",
+      "bbox": [
+        462.0,
+        672.0,
+        629.0,
+        796.0
+      ],
+      "mask_png": "masks/o6.png",
+      "area": 12112,
+      "score": 0.736,
+      "concept": "wrapper"
+    }
+  ]
+}
