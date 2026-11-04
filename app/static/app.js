@@ -5,30 +5,39 @@ const STEP_NAMES = { perceive: "Find the objects", propose: "Propose what happen
                      verify: "Check every claim", rewind: "Make the rewind" };
 const VERDICT = { yes: "confirmed", partly: "partly right", unclear: "can't tell", no: "contradicted" };
 let current = null;
+// The page also runs as a static copy (docs/live): no server, a finished run read from saved files.
+const STATIC = document.documentElement.dataset.static === "1";
 
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function fmt(m) { return m < 120 ? `${+m.toFixed(1)} min` : `${(m / 60).toFixed(1)} h`; }
 const DATED = ["clock_agrees", "narrowed_by_clock", "replaced_by_clock"];
-// A time is shown only when a clue in the photo gave one; otherwise the model's guess is not a time.
+// A proven time comes from a clue in the photo; otherwise the model's reasoned estimate, always labelled.
 function isDated(e) { return "dated" in e ? e.dated : DATED.includes(e.clock); }
+function hasTime(e) { return isDated(e) || !!e.estimate; }
+function span(e) { return isDated(e) ? [e.minutes_before_min, e.minutes_before_max] : e.estimate; }
 function whenText(e) {
   const lo = e.minutes_before_min, hi = e.minutes_before_max;
+  if (!isDated(e) && e.estimate) {
+    const [a, b] = e.estimate;
+    return a === b ? `about ${fmt(b)} before (estimate)` : a === 0 ? `estimated up to ${fmt(b)} before`
+      : `estimated ${+a.toFixed(1)} to ${fmt(b)} before`;
+  }
   if (!isDated(e)) return lo > 0 ? `at least ${fmt(lo)} before` : "time unknown";
   if (lo === 0) return `up to ${fmt(hi)} before`;
   return hi < 120 ? `${+lo.toFixed(1)} to ${+hi.toFixed(1)} min before` : `${fmt(lo)} to ${fmt(hi)} before`;
 }
 
 async function loadRuns(selected) {
-  const runs = await (await fetch("/api/runs")).json();
+  const runs = await (await fetch(STATIC ? "api/runs.json" : "api/runs")).json();
   $("runs").innerHTML = runs.map((r) =>
     `<button data-name="${esc(r.name)}" title="${esc(r.summary)}" aria-current="${r.name === selected}">
-       <img src="/files/${encodeURIComponent(r.name)}/input.jpg" alt="${esc(r.summary || r.name)}" loading="lazy"></button>`).join("");
+       <img src="files/${encodeURIComponent(r.name)}/input.jpg" alt="${esc(r.summary || r.name)}" loading="lazy"></button>`).join("");
   $("runs").querySelectorAll("button").forEach((b) => b.onclick = () => openRun(b.dataset.name));
   if (!selected && runs.length) openRun(runs[0].name);
 }
 
 async function openRun(name) {
-  const r = await fetch(`/api/runs/${encodeURIComponent(name)}`);
+  const r = await fetch(STATIC ? `api/runs/${encodeURIComponent(name)}.json` : `api/runs/${encodeURIComponent(name)}`);
   if (!r.ok) return;
   const { result, files } = await r.json();
   current = { name, result, files };
@@ -80,7 +89,7 @@ function renderMoves(moves) {
 
 function setView(view) {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.view === view));
-  const base = `/files/${encodeURIComponent(current.name)}/`;
+  const base = `files/${encodeURIComponent(current.name)}/`;
   const video = $("rewind"), img = $("photo");
   const clip = view === "rewind" ? "rewind.mp4" : view === "proof" ? "proof_rewind.mp4" : null;
   if (clip && current.files.includes(clip)) {
@@ -107,8 +116,8 @@ function render() {
 
 function renderRuler(res) {
   const events = res.events || [];
-  const dated = events.filter(isDated);
-  const maxM = Math.max(10, ...dated.map((e) => e.minutes_before_max));
+  const dated = events.filter(hasTime);
+  const maxM = Math.max(10, ...dated.map((e) => span(e)[1]));
   const narrow = $("ruler").clientWidth < 560;
   const ticks = (narrow ? [0, 5, 15, 60, 240, 1440] : [0, 1, 2, 5, 10, 15, 30, 60, 120, 240, 480, 1440])
     .filter((t) => t <= maxM * 1.05);
@@ -118,10 +127,11 @@ function renderRuler(res) {
   const x = (m) => 100 - (Math.sqrt(m) / Math.sqrt(top)) * 100;
   const rows = events.map((e, i) => {
     let mark;
-    if (isDated(e)) {
-      const left = x(e.minutes_before_max), right = x(e.minutes_before_min);
+    if (hasTime(e)) {
+      const [lo, hi] = span(e);
+      const left = x(hi), right = x(lo);
       const cls = [e.status === "contested" ? "contested" : "", e.status === "partly_verified" ? "partly" : "",
-                   e.clock && DATED.includes(e.clock) ? "clocked" : ""].join(" ");
+                   e.clock && DATED.includes(e.clock) ? "clocked" : "", isDated(e) ? "" : "estimate"].join(" ");
       mark = `<span class="band ${cls}" style="left:${left}%;width:${Math.max(0.8, right - left)}%" title="${esc(whenText(e))}"></span>`;
     } else {
       mark = `<span class="unknown">${esc(whenText(e))}</span>`;
@@ -130,7 +140,7 @@ function renderRuler(res) {
     if (!dated.length)                 // nothing dated: an ordered list, no empty time axis
       return `<button class="row" data-i="${i}" aria-pressed="false">${label}<span class="chip">${esc(whenText(e))}</span></button>`;
     return `<button class="row" data-i="${i}" aria-pressed="false">${label}
-      <span class="track ${isDated(e) ? "" : "undated"}">${mark}</span></button>`;
+      <span class="track ${hasTime(e) ? "" : "undated"}">${mark}</span></button>`;
   }).join("");
   const axis = ticks.map((t) => `<span class="tick ${t === 0 ? "now" : ""}" style="left:${x(t)}%">${t === 0 ? "photo" : fmt(t)}</span>`).join("");
   const foot = dated.length ? `<div class="axis">${axis}</div>`
@@ -145,7 +155,7 @@ function renderRuler(res) {
 async function loadCheck(name) {
   $("check").hidden = true;
   if (!current.files.includes("score.json")) return;
-  const r = await fetch(`/files/${encodeURIComponent(name)}/score.json`);
+  const r = await fetch(`files/${encodeURIComponent(name)}/score.json`);
   if (!r.ok || !current || current.name !== name) return;
   renderCheck(await r.json());
 }
@@ -197,7 +207,8 @@ function renderCheck(data) {
   let when = `When: in the video, all of this happened ${+lo.toFixed(1)} to ${+hi.toFixed(1)} min before the photo. `;
   when += s.dated ? `Retrodict dated ${s.dated} of them from clues; ${s.covered} of those times contain the real time`
                     + (s.median_width_min != null ? `, about ${fmt(s.median_width_min)} wide.` : ".")
-                  : "Retrodict found no clue in the photo that dates them, so it says “time unknown” instead of guessing.";
+                  : "Retrodict found no clue in the photo that proves when they happened.";
+  if (s.estimated) when += ` ${s.estimated} more were estimated from the order of the steps; ${s.est_covered} of those estimates contain the real time.`;
   $("c-when").textContent = when;
   $("c-extra").innerHTML = w ? `<li>V-JEPA 2, Meta's video model, watched the real video as a second witness: it saw
     ${w.seen} of the ${w.seeable} events it has words for, and ${w.stray_windows} of its ${w.action_windows} action
@@ -229,8 +240,10 @@ function select(i) {
   $("d-when").textContent = whenText(e);
   $("d-desc").textContent = e.description;
   const why = [e.clock_rule && `Physics: ${e.clock_rule}.`, e.bounded_by && `Also ${e.bounded_by}.`,
-               e.trace_check && e.trace_check.verdict !== "yes" && `The checker did not confirm the ${String(e.trace_check.trace).replace(/_/g, " ")}, so no clock was used.`,
-               !isDated(e) && "Nothing in the photo shows when this happened, so no time is given."]
+               e.trace_check && e.trace_check.verdict === "not applicable" && `The ${String(e.trace_check.trace).replace(/_/g, " ")} clue is on a peel or skin, which browns within minutes; the cut-fruit clock is only for fruit flesh, so no clock was used.`,
+               e.trace_check && !["yes", "not applicable"].includes(e.trace_check.verdict) && `The checker did not confirm the ${String(e.trace_check.trace).replace(/_/g, " ")}, so no clock was used.`,
+               !isDated(e) && e.estimate && "No clue in the photo proves when this happened: the time is reasoned from the order of the steps, an estimate, not proof.",
+               !isDated(e) && !e.estimate && "Nothing in the photo shows when this happened, so no time is given."]
               .filter(Boolean).join(" ");
   $("d-physics").hidden = !why; $("d-physics").textContent = why;
   $("d-evidence").innerHTML = e.evidence.map((ev) =>
@@ -240,7 +253,7 @@ function select(i) {
   const oid = e.undo_object || e.evidence[0]?.object_id;
   const file = `detail_${oid}.jpg`;
   $("d-views").parentElement.hidden = !current.files.includes(file);
-  $("d-views").src = `/files/${encodeURIComponent(current.name)}/${file}`;
+  $("d-views").src = `files/${encodeURIComponent(current.name)}/${file}`;
 }
 
 async function upload(file) {
@@ -251,12 +264,12 @@ async function upload(file) {
   $("summary").textContent = "Working backward from the photo…";
   $("ruler").innerHTML = ""; $("detail").hidden = true; $("moves").innerHTML = ""; $("note").textContent = "";
   $("photo").hidden = false; $("rewind").hidden = true; $("photo").src = URL.createObjectURL(file);
-  const r = await fetch("/api/run", { method: "POST", body });
+  const r = await fetch("api/run", { method: "POST", body });
   if (!r.ok) { $("summary").innerHTML = `<span class="error">${esc((await r.json()).detail)}</span>`; return; }
   const { job, name } = await r.json();
   const trace = [], moves = [];
   renderSteps(trace, "perceive");
-  const es = new EventSource(`/api/jobs/${job}/events`);
+  const es = new EventSource(`api/jobs/${job}/events`);
   es.onmessage = async (msg) => {
     const { kind, data } = JSON.parse(msg.data);
     if (kind === "step_started") renderSteps(trace, data.step);
@@ -269,6 +282,8 @@ async function upload(file) {
 }
 
 document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => setView(b.dataset.view));
-$("pick").onchange = (e) => upload(e.target.files[0]);
-$("snap").onchange = (e) => upload(e.target.files[0]);
+if (!STATIC) {
+  $("pick").onchange = (e) => upload(e.target.files[0]);
+  $("snap").onchange = (e) => upload(e.target.files[0]);
+}
 loadRuns(null);
