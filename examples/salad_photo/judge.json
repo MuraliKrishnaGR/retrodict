@@ -1,0 +1,55 @@
+{
+  "judge": "Muse Spark Open, blind (claims labelled A, B, C; system not named)",
+  "claims_text": [
+    "An apple was peeled earlier leaving a long thin peel strip that has dried and browned",
+    "Two to three citrus fruits were peeled",
+    "A banana was peeled and sliced",
+    "A pale apple was cut into small chunks and thin rounds on the board and is still fresh",
+    "A serrated knife with tan plastic handle was used to cut the fruit and left on the metal board",
+    "The cut citrus, apple and banana pieces were placed together in the stainless steel bowl",
+    "the food in the bowl was most likely mixed with the spoon, which was left standing in it",
+    "The cap was removed from the translucent plastic bottle leaving it open on its side",
+    "water was most likely poured from the plastic water bottle into the cup"
+  ],
+  "covers": {
+    "e1": [],
+    "e2": [
+      "orange"
+    ],
+    "e3": [
+      "banana_peel",
+      "banana_slice"
+    ],
+    "e4": [
+      "apple_cut"
+    ],
+    "e5": [],
+    "e6": [
+      "into_bowl"
+    ],
+    "e7": [
+      "mix"
+    ],
+    "e8": [
+      "bottle_open"
+    ],
+    "e9": [
+      "pour_water"
+    ]
+  },
+  "wrong": [
+    "e1",
+    "e2"
+  ],
+  "notes": {
+    "e1": "Apple was cut into pieces not peeled; real peels are red banana and orange, so wrong fruit/action",
+    "e2": "Only one orange was peeled, claim overstates as 2-3 citrus but citrus=orange covers that peel",
+    "e3": "Correctly states banana was peeled and sliced",
+    "e4": "Small chunks matches apple cut into small pieces; pale/rounds/fresh are unmentioned colour/shape/state details not contradictions",
+    "e5": "Knife leftover/state; vague 'cut the fruit' without naming fruit does not cover specific cuts per rule",
+    "e6": "citrus=orange synonym; correctly states cut orange/apple/banana moved into bowl",
+    "e7": "most likely mixed with spoon matches salad mixed with spoon, spoon left is unmentioned position",
+    "e8": "cap removed = bottle opened; translucent bottle and open on side are unmentioned details, desk/table same surface",
+    "e9": "most likely poured from bottle into cup matches poured into steel glass, cup=glass synonym"
+  }
+}

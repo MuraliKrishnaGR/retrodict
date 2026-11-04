@@ -1,0 +1,276 @@
+{
+  "key": "eval\\keys\\salad_01.json",
+  "run": "out\\salad_photo",
+  "scene": {
+    "video": "salad_01.mp4",
+    "split": "test",
+    "video_seconds": 330
+  },
+  "score": {
+    "matched_by": "blind judge",
+    "events": [
+      {
+        "id": "banana_peel",
+        "what": "red banana trimmed and peeled, peel left on the table",
+        "true_min": [
+          5.95,
+          6.45
+        ],
+        "found": true,
+        "event": "e3",
+        "text": "A banana was peeled and sliced",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "banana_slice",
+        "what": "banana sliced into rounds on the board",
+        "true_min": [
+          5.4,
+          6.1
+        ],
+        "found": true,
+        "event": "e3",
+        "text": "A banana was peeled and sliced",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "apple_cut",
+        "what": "apple cut into slices, then into small pieces",
+        "true_min": [
+          3.45,
+          5.55
+        ],
+        "found": true,
+        "event": "e4",
+        "text": "A pale apple was cut into small chunks and thin rounds on the board and is still fresh",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "orange",
+        "what": "orange cut in half, peeled and pulled into segments; peels left",
+        "true_min": [
+          2.4,
+          3.35
+        ],
+        "found": true,
+        "event": "e2",
+        "text": "Two to three citrus fruits were peeled",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "into_bowl",
+        "what": "cut fruit moved from the board into the bowl",
+        "true_min": [
+          1.8,
+          2.5
+        ],
+        "found": true,
+        "event": "e6",
+        "text": "The cut citrus, apple and banana pieces were placed together in the stainless steel bowl",
+        "dated": true,
+        "range_min": [
+          0.0,
+          30.0
+        ],
+        "covered": true,
+        "width": 30.0,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "mix",
+        "what": "salad mixed with the spoon",
+        "true_min": [
+          1.3,
+          1.95
+        ],
+        "found": true,
+        "event": "e7",
+        "text": "the food in the bowl was most likely mixed with the spoon, which was left standing in it",
+        "dated": true,
+        "range_min": [
+          0.0,
+          30.0
+        ],
+        "covered": true,
+        "width": 30.0,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "bottle_open",
+        "what": "water bottle opened; after pouring, the cap was put aside on the desk",
+        "true_min": [
+          0.85,
+          1.3
+        ],
+        "found": true,
+        "event": "e8",
+        "text": "The cap was removed from the translucent plastic bottle leaving it open on its side",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      },
+      {
+        "id": "pour_water",
+        "what": "water poured from the bottle into the steel glass",
+        "true_min": [
+          0.9,
+          1.25
+        ],
+        "found": true,
+        "event": "e9",
+        "text": "water was most likely poured from the plastic water bottle into the cup",
+        "dated": false,
+        "range_min": null,
+        "covered": false,
+        "width": null,
+        "estimate": null,
+        "est_covered": false
+      }
+    ],
+    "retro": [
+      {
+        "event": "e1",
+        "text": "An apple was peeled earlier leaving a long thin peel strip that has dried and browned",
+        "key": null,
+        "keys": [],
+        "wrong": true
+      },
+      {
+        "event": "e2",
+        "text": "Two to three citrus fruits were peeled",
+        "key": "orange",
+        "keys": [
+          "orange"
+        ],
+        "wrong": true
+      },
+      {
+        "event": "e3",
+        "text": "A banana was peeled and sliced",
+        "key": "banana_peel",
+        "keys": [
+          "banana_peel",
+          "banana_slice"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e4",
+        "text": "A pale apple was cut into small chunks and thin rounds on the board and is still fresh",
+        "key": "apple_cut",
+        "keys": [
+          "apple_cut"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e5",
+        "text": "A serrated knife with tan plastic handle was used to cut the fruit and left on the metal board",
+        "key": null,
+        "keys": [],
+        "wrong": false
+      },
+      {
+        "event": "e6",
+        "text": "The cut citrus, apple and banana pieces were placed together in the stainless steel bowl",
+        "key": "into_bowl",
+        "keys": [
+          "into_bowl"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e7",
+        "text": "the food in the bowl was most likely mixed with the spoon, which was left standing in it",
+        "key": "mix",
+        "keys": [
+          "mix"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e8",
+        "text": "The cap was removed from the translucent plastic bottle leaving it open on its side",
+        "key": "bottle_open",
+        "keys": [
+          "bottle_open"
+        ],
+        "wrong": false
+      },
+      {
+        "event": "e9",
+        "text": "water was most likely poured from the plastic water bottle into the cup",
+        "key": "pour_water",
+        "keys": [
+          "pour_water"
+        ],
+        "wrong": false
+      }
+    ],
+    "false_claims": [
+      {
+        "event": "e1",
+        "text": "An apple was peeled earlier leaving a long thin peel strip that has dried and browned"
+      },
+      {
+        "event": "e2",
+        "text": "Two to three citrus fruits were peeled"
+      }
+    ],
+    "found": 8,
+    "total": 8,
+    "dated": 2,
+    "covered": 2,
+    "median_width_min": 30.0,
+    "estimated": 0,
+    "est_covered": 0,
+    "real_span_min": [
+      0.85,
+      6.45
+    ],
+    "order_agree": 24,
+    "order_pairs": 27,
+    "order_wrong": [
+      "banana_peel happened before orange",
+      "banana_slice happened before orange",
+      "apple_cut happened before orange"
+    ],
+    "unsupported": [
+      {
+        "event": "e1",
+        "text": "An apple was peeled earlier leaving a long thin peel strip that has dried and browned",
+        "wrong": true
+      },
+      {
+        "event": "e5",
+        "text": "A serrated knife with tan plastic handle was used to cut the fruit and left on the metal board",
+        "wrong": false
+      }
+    ]
+  }
+}
