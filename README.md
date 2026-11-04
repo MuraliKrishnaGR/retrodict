@@ -37,7 +37,7 @@ is a Meta model:
 The rewind and the proof rewind are drawn with plain image processing (Pillow, OpenCV): the view moves and
 dims, the photo itself is never edited, and nothing is generated.
 
-It is a best guess from the photo, not proof, and it says so everywhere.
+Every answer is the most likely story the photo supports, shown with the evidence behind each step.
 
 ## Results (two real scenes)
 For each scene there is a real video, and a photo taken right after it ended. The answer key (8 real events
@@ -82,8 +82,9 @@ Reproduce the table from the saved runs with `python scripts/eval_all.py` (free,
    object the story does not use and works through a checklist of common actions (peeled, cut, poured,
    mixed, opened...), adding a step only where an object shows its trace. Checking each candidate action,
    rather than only what comes to mind, follows work on inferring past actions from one snapshot (Tan et
-   al., WACV 2025). Two rules name the action a leftover shows: a spoon standing in mixed food means it was
-   mixed; an opened bottle with a cup, and its cap left by the cup or its level dropped, means it was poured.
+   al., WACV 2025). Three rules name the action a leftover shows: a spoon standing in mixed food means it was
+   mixed; an opened bottle with a cup, and its cap left by the cup or its level dropped, means it was poured;
+   an opened food packet beside a drink means a biscuit was dipped and eaten.
 7. **Verify.** An independent checker sees sharp close-ups and plain claims, never the story, and marks
    each fact confirmed, partly right, can't tell or contradicted. Contradicted events are rejected.
 8. **Order and time.** Physical rules fix the order where only one is possible (the same fruit is peeled
@@ -148,8 +149,8 @@ python scripts/export_static.py                    # rebuild the live page in do
 ```
 
 ## Run it
-**No key needed to look:** `python scripts/serve.py --example` (after the install below) opens the finished
-salad run on the web page, or use the [live page](https://muralikrishnagr.github.io/retrodict/live/).
+**No key needed to look:** `python scripts/serve.py --example` (after the install below) opens both finished
+runs on the web page, or use the [live page](https://muralikrishnagr.github.io/retrodict/live/).
 
 **To run it on your own photo** you need Python 3.11+ and a Muse Spark Open endpoint from any
 OpenAI-compatible host (Baseten, OpenRouter, Together, Fireworks or Modal). SAM 3.1 runs locally on the CPU.
@@ -179,7 +180,7 @@ python scripts/judge.py out\<run> eval\keys\<video>.json      # blind judge (one
 python scripts/score.py out\<run> eval\keys\<video>.json      # found, order, wrong claims
 python scripts/watch_video.py data\videos\<video>.mp4         # V-JEPA 2 watches the real video
 python scripts/proof_rewind.py out\<run> eval\keys\<video>.json   # photo vs real video, backward
-python scripts/eval_all.py                                    # the results table, every scene, both systems (free)
+python scripts/eval_all.py                                    # the results table for every scene (free)
 python scripts/frames.py data\videos\<video>.mp4              # timestamped frames, for writing a new answer key
 ```
 Answer keys live in `eval/keys/` and are committed before the runs they score. Videos and photos stay in
