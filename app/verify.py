@@ -7,6 +7,8 @@ left with no confirmed evidence is moved to 'rejected', so the UI can show what 
 Clock gate: a trace clock may date an event only if the checker also confirms, by itself, that the trace
 is really there (run 2 on the milk photo: small bubbles were read as a skin, and the skin's clock then
 moved a 3-minute-old drink to "10 to 90 min"). An unconfirmed trace loses its clock."""
+import re
+
 from app.clocks import LOOKS
 from app.schemas import VerifyReport
 
@@ -94,3 +96,23 @@ async def verify(models, image_jpeg: bytes, events: list, labels: dict) -> dict:
     verdicts = {c.claim_id: (c.verdict, c.note) for c in report.checks}
     kept, rejected = apply_checks(events, claims, verdicts)
     return {"events": kept, "rejected": rejected, "claims": len(claims)}
+
+
+FLESH_CLOCKS = {"fresh_cut", "browned_cut"}
+NOT_FLESH = re.compile(r"\b(peels?|rinds?|skins?|pith|zest)\b")
+
+
+def flesh_clocks_only(events: list, states: dict, labels: dict) -> list:
+    """The cut-fruit clocks time exposed fruit FLESH. The inside of a peel browns within minutes, so a browned
+    peel says nothing about 15 minutes (salad run: a banana peel's brown edge dated the peeling to 15-40 min;
+    it was 6). If the clue the clock rests on is a peel, rind or skin, the clock is dropped."""
+    out = []
+    for e in events:
+        if e.get("trace") in FLESH_CLOCKS and e.get("clock") not in (None, "no_clock", "clock_not_applied") \
+                and e.get("evidence"):
+            oid = e["evidence"][0]["object_id"]
+            text = f"{labels.get(oid, '')} {states.get(oid, {}).get('what', '')}".lower()
+            if NOT_FLESH.search(text):
+                e = _drop_clock(e, "not applicable", "the clue is a peel or skin; this clock is for cut fruit flesh")
+        out.append(e)
+    return out
