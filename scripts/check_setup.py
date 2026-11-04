@@ -35,7 +35,7 @@ async def run(photo: Path | None) -> bool:
         print(f"[FAIL] 1 key: {e}")
         return False
     if len(key) < 20:
-        print("[FAIL] 1 key: the key in .env is too short to be real.\n       fix:   python scripts/set_key.py")
+        print("[FAIL] 1 key: the key in .env is too short to be real.\n       fix:   python scripts/use_host.py <host>")
         return False
     ok("1 key", f"found ({len(key)} characters), host {config.LLM_BASE_URL}, model {config.LLM_MODEL}")
 
